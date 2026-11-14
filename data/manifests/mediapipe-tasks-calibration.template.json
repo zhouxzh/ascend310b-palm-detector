@@ -1,0 +1,16 @@
+{
+  "mapping": "mediapipe_tasks_Left=anatomical_left;Right=anatomical_right",
+  "reviewer": "replace-with-reviewer-id",
+  "reviewer_type": "human",
+  "reviewed_at_utc": "YYYY-MM-DDTHH:MM:SSZ",
+  "examples": [
+    {
+      "source_id": "replace-with-source-image-id",
+      "image_sha256": "replace-with-image-sha256",
+      "tasks_label": "Left",
+      "tasks_score": 0.0,
+      "anatomical_label_confirmed_by_review": "left_palm",
+      "notes": "Record why the physical anatomy is unambiguous."
+    }
+  ]
+}

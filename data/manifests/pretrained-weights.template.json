@@ -1,0 +1,10 @@
+{
+  "model_name": "nanodet-plus-m_320",
+  "upstream_url": "replace-with-published-checkpoint-url",
+  "upstream_revision_or_release": "replace-with-fixed-release",
+  "license": "replace-with-license",
+  "local_path": "artifacts/pretrained/nanodet-plus-m-320.ckpt",
+  "bytes": 0,
+  "sha256": "replace-with-lowercase-sha256",
+  "downloaded_at_utc": "YYYY-MM-DDTHH:MM:SSZ"
+}

@@ -1,0 +1,11 @@
+{
+  "source_id": "replace-with-immutable-source-id",
+  "source_url_or_internal_reference": "replace-with-approved-reference",
+  "acquired_at_utc": "YYYY-MM-DDTHH:MM:SSZ",
+  "license_or_consent_reference": "replace-with-approved-license-or-consent-record",
+  "allowed_use": "training-and-evaluation-only",
+  "retention_policy_reference": "replace-with-policy-reference",
+  "annotation_version": "v001",
+  "anatomical_handedness_definition": "person anatomical left/right; not image left/right",
+  "notes": "Do not put raw images, raw video, names, or credentials in this manifest."
+}

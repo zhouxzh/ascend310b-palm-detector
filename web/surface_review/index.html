@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>掌面标注审核</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body data-mobile-tab="image">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◇</span>
+      <div>
+        <strong>掌面标注审核</strong>
+        <span id="dataset-name">加载中</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span class="global-progress" id="global-progress">审核记录加载中</span>
+      <a class="quiet-button" href="/api/export.csv" download>导出 CSV</a>
+    </div>
+  </header>
+
+  <button class="mobile-filter-toggle" id="mobile-filter-toggle" type="button" aria-expanded="false" aria-controls="sampling-form">抽样设置 <span aria-hidden="true">▾</span></button>
+  <form class="sampling-bar" id="sampling-form">
+    <label class="field compact-field">数据划分
+      <select id="split-filter" name="split">
+        <option value="all">全部划分</option>
+        <option value="train">训练集</option>
+        <option value="val">验证集</option>
+        <option value="test">测试集</option>
+      </select>
+    </label>
+    <label class="field compact-field">候选朝向
+      <select id="view-filter" name="view">
+        <option value="all">全部朝向</option>
+        <option value="palm">手心</option>
+        <option value="back">手背</option>
+        <option value="side">侧面候选</option>
+        <option value="unknown">无法判断</option>
+      </select>
+    </label>
+    <label class="field compact-field">样本数
+      <select id="sample-size" name="size">
+        <option value="50">50</option>
+        <option value="100" selected>100</option>
+        <option value="200">200</option>
+        <option value="500">500</option>
+      </select>
+    </label>
+    <fieldset class="sample-mode">
+      <legend>抽样方式</legend>
+      <label><input type="radio" name="mode" value="balanced" checked><span>均衡</span></label>
+      <label><input type="radio" name="mode" value="random"><span>随机</span></label>
+    </fieldset>
+    <label class="field seed-field">随机种子
+      <input id="sample-seed" name="seed" type="number" min="0" step="1" required>
+    </label>
+    <button class="primary-button" type="submit">载入样本</button>
+    <button class="quiet-button" id="new-sample" type="button">新抽一批</button>
+  </form>
+
+  <main class="workspace">
+    <aside class="queue-pane" aria-label="审核队列">
+      <div class="pane-heading">
+        <div><span class="eyebrow">REVIEW QUEUE</span><h2>样本队列</h2></div>
+        <span class="count-pill" id="queue-count">0 / 0</span>
+      </div>
+      <div class="queue-summary" id="queue-summary">正在载入样本</div>
+      <div class="queue-list" id="queue-list"></div>
+    </aside>
+
+    <section class="image-pane" aria-label="标注图像">
+      <div class="viewer-toolbar">
+        <div class="viewer-title">
+          <span class="eyebrow" id="item-split">—</span>
+          <h1 id="item-title">正在载入样本</h1>
+        </div>
+        <div class="view-switch" role="group" aria-label="图像视图">
+          <button id="show-crop" type="button" aria-pressed="false">手部裁剪</button>
+          <button id="show-full" type="button" class="selected" aria-pressed="true">原图</button>
+        </div>
+      </div>
+      <div class="model-toolbar">
+        <label class="field model-field"><span><i class="model-swatch model-a-swatch"></i>模型 A</span>
+          <select id="model-a"><option value="">不显示</option></select>
+          <small class="model-identity" id="model-a-identity">未选择模型</small>
+        </label>
+        <label class="field model-field"><span><i class="model-swatch model-b-swatch"></i>模型 B</span>
+          <select id="model-b"><option value="">不显示</option></select>
+          <small class="model-identity" id="model-b-identity">未选择模型</small>
+        </label>
+        <label class="field threshold-field"><span class="threshold-head">置信度 <output id="threshold-value">0.35</output></span>
+          <input id="score-threshold" type="range" min="0.05" max="0.95" step="0.05" value="0.35">
+        </label>
+        <div class="model-legend" id="model-legend" aria-live="polite"><span class="ground-truth-key">原标注</span></div>
+      </div>
+      <div class="image-stage" id="image-stage">
+        <canvas id="crop-canvas" width="640" height="640" aria-label="手部裁剪图"></canvas>
+        <div class="full-figure" id="full-figure">
+          <img id="full-image" alt="当前标注原图">
+          <div id="prediction-overlays"></div>
+          <div class="bbox-overlay" id="bbox-overlay"><span id="box-label"></span></div>
+        </div>
+      </div>
+      <div class="viewer-footer">
+        <div class="image-meta">
+          <span id="image-source">—</span>
+          <span id="image-shape">—</span>
+        </div>
+        <div class="navigation">
+          <button id="previous-item" type="button" class="icon-button" aria-label="上一张" title="上一张">‹</button>
+          <span id="item-position">0 / 0</span>
+          <button id="next-item" type="button" class="icon-button" aria-label="下一张" title="下一张">›</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="review-pane" aria-label="审核结论">
+      <div class="pane-heading review-heading">
+        <div><span class="eyebrow">ASSESSMENT</span><h2>审核结论</h2></div>
+        <span class="review-status" id="review-status">待审核</span>
+      </div>
+      <div class="review-content">
+        <div class="record-block">
+          <span class="block-label">自动标注</span>
+          <div class="candidate-line"><span class="view-indicator" id="candidate-indicator"></span><strong id="candidate-label">—</strong></div>
+          <div class="candidate-meta" id="candidate-meta">—</div>
+        </div>
+        <div class="record-block identity-block">
+          <div><span class="block-label">左右手</span><strong id="handedness-value">—</strong></div>
+          <div><span class="block-label">标注 ID</span><strong id="annotation-id">—</strong></div>
+        </div>
+        <form id="review-form" class="review-form">
+          <label class="field reviewer-field">审核人
+            <input id="reviewer-name" type="text" autocomplete="name" maxlength="100" placeholder="姓名或审核 ID" required>
+          </label>
+          <fieldset class="verdict-field">
+            <legend>实际可见朝向</legend>
+            <div class="verdict-options" id="verdict-options">
+              <label><input type="radio" name="verdict" value="palm"><span class="option-dot palm-dot"></span><span>手心</span></label>
+              <label><input type="radio" name="verdict" value="back"><span class="option-dot back-dot"></span><span>手背</span></label>
+              <label><input type="radio" name="verdict" value="side"><span class="option-dot side-dot"></span><span>侧面</span></label>
+              <label><input type="radio" name="verdict" value="unknown"><span class="option-dot unknown-dot"></span><span>无法判断</span></label>
+              <label class="wide-option"><input type="radio" name="verdict" value="invalid"><span class="option-dot invalid-dot"></span><span>手框或标注无效</span></label>
+            </div>
+          </fieldset>
+          <label class="field note-field">备注
+            <textarea id="review-note" rows="3" maxlength="2000" placeholder="可选"></textarea>
+          </label>
+          <button class="primary-button save-button" id="save-review" type="submit">保存审核</button>
+        </form>
+        <div class="saved-detail" id="saved-detail"></div>
+      </div>
+    </aside>
+  </main>
+
+  <nav class="mobile-tabs" aria-label="页面视图">
+    <button type="button" data-tab="queue">队列</button>
+    <button type="button" data-tab="image" class="active">图像</button>
+    <button type="button" data-tab="review">审核</button>
+  </nav>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

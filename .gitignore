@@ -208,6 +208,18 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Palm detector training inputs and generated outputs. Only the documented
+# templates under data/manifests are versioned.
+data/*
+!data/.gitkeep
+!data/manifests/
+data/manifests/*
+!data/manifests/README.md
+!data/manifests/*.template.json
+artifacts/
+reports/
+third_party/nanodet/
+
 # PyPI configuration file
 .pypirc
 
