@@ -1,0 +1,73 @@
+schema_version: 1
+upstream:
+  repository: https://github.com/PaddlePaddle/PaddleDetection.git
+  ref: b25522a0f4bde8c80603f3ba5e3472059972e3b5
+  release: release/2.9
+dataset: data/portable-hagridv2-mediapipe-hand/coco-handed-v001
+validation:
+  dev: artifacts/sweeps/palm-v001/validation-audited/instances_dev.json
+  gate: artifacts/sweeps/palm-v001/validation-audited/instances_gate.json
+  test: data/portable-hagridv2-mediapipe-hand/coco-handed-v001/annotations/instances_test.json
+classes: [left_palm, right_palm]
+seed: 42
+reference_gpu_count: 4
+single_gpu_count: 1
+validation_interval: 5
+early_stop:
+  patience: 8
+  min_delta: 0.001
+variants:
+  - id: picodet-xs-320
+    config: configs/picodet/picodet_xs_320_coco_lcnet.yml
+    input_size: 320
+    batch_size: 64
+    reference_lr: 0.32
+    epochs: 300
+  - id: picodet-xs-416
+    config: configs/picodet/picodet_xs_416_coco_lcnet.yml
+    input_size: 416
+    batch_size: 56
+    reference_lr: 0.28
+    epochs: 300
+  - id: picodet-s-320
+    config: configs/picodet/picodet_s_320_coco_lcnet.yml
+    input_size: 320
+    batch_size: 64
+    reference_lr: 0.32
+    epochs: 300
+  - id: picodet-s-416
+    config: configs/picodet/picodet_s_416_coco_lcnet.yml
+    input_size: 416
+    batch_size: 48
+    reference_lr: 0.24
+    epochs: 300
+  - id: picodet-m-320
+    config: configs/picodet/picodet_m_320_coco_lcnet.yml
+    input_size: 320
+    batch_size: 48
+    reference_lr: 0.24
+    epochs: 300
+  - id: picodet-m-416
+    config: configs/picodet/picodet_m_416_coco_lcnet.yml
+    input_size: 416
+    batch_size: 48
+    reference_lr: 0.24
+    epochs: 250
+  - id: picodet-l-320
+    config: configs/picodet/picodet_l_320_coco_lcnet.yml
+    input_size: 320
+    batch_size: 24
+    reference_lr: 0.12
+    epochs: 250
+  - id: picodet-l-416
+    config: configs/picodet/picodet_l_416_coco_lcnet.yml
+    input_size: 416
+    batch_size: 24
+    reference_lr: 0.12
+    epochs: 250
+  - id: picodet-l-640
+    config: configs/picodet/picodet_l_640_coco_lcnet.yml
+    input_size: 640
+    batch_size: 12
+    reference_lr: 0.06
+    epochs: 200

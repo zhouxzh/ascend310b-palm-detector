@@ -219,6 +219,11 @@ data/manifests/*
 artifacts/
 reports/
 third_party/nanodet/
+third_party/PaddleDetection/
+
+# PicoDet training outputs and local environment metadata.
+artifacts/picodet-v001/
+artifacts/picodet-exports/
 
 # PyPI configuration file
 .pypirc

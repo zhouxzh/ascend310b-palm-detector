@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Prepare immutable PicoDet sweep configs and provenance metadata."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+MATRIX = ROOT / "configs/picodet-sweep-v001.yml"
+OUTPUT = ROOT / "artifacts/picodet-v001/configs"
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
+    source = upstream_root / item["config"]
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    # Keep the upstream config as a base. Runtime overrides are emitted as a
+    # separate JSON command manifest so upstream YAML tags remain untouched.
+    size = int(item["input_size"])
+    microbatch = int(item["batch_size"])
+    training_config = {
+        "_BASE_": [str(source.resolve())],
+        "num_classes": len(matrix["classes"]),
+        "use_gpu": True,
+        "use_vdl": True,
+        "epoch": int(item["epochs"]),
+        "snapshot_epoch": int(matrix["validation_interval"]),
+        "worker_num": 8,
+        "TrainDataset": {
+            "name": "COCODataSet",
+            "dataset_dir": str((ROOT / matrix["dataset"]).resolve()),
+            "image_dir": "images",
+            "anno_path": "annotations/instances_train.json",
+            "data_fields": ["image", "gt_bbox", "gt_class", "is_crowd"],
+        },
+        "EvalDataset": {
+            "name": "COCODataSet",
+            "dataset_dir": str((ROOT / matrix["dataset"]).resolve()),
+            "image_dir": "images",
+            "anno_path": str((ROOT / matrix["validation"]["dev"]).resolve()),
+            "allow_empty": True,
+        },
+        "TrainReader": {
+            "sample_transforms": [
+                {"Decode": {}},
+                {"RandomCrop": {}},
+                {"RandomFlip": {"prob": 0.0}},
+                {"RandomDistort": {}},
+            ],
+            "batch_transforms": [
+                {"BatchRandomResize": {"target_size": [size, size], "random_size": False, "random_interp": False, "keep_ratio": False}},
+                {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
+                {"Permute": {}},
+                {"PadGT": {}},
+            ],
+            "batch_size": microbatch,
+            "shuffle": True,
+            "drop_last": True,
+        },
+        "EvalReader": {
+            "sample_transforms": [
+                {"Decode": {}},
+                {"Resize": {"interp": 2, "target_size": [size, size], "keep_ratio": False}},
+                {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
+                {"Permute": {}},
+            ],
+            "batch_transforms": [{"PadBatch": {"pad_to_stride": 32}}],
+            "batch_size": 8,
+            "shuffle": False,
+        },
+        "TestReader": {
+            "inputs_def": {"image_shape": [1, 3, size, size]},
+            "sample_transforms": [
+                {"Decode": {}},
+                {"Resize": {"interp": 2, "target_size": [size, size], "keep_ratio": False}},
+                {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
+                {"Permute": {}},
+            ],
+            "batch_size": 1,
+        },
+        "LearningRate": {"base_lr": round(item["reference_lr"] * matrix["single_gpu_count"] / matrix["reference_gpu_count"], 8)},
+    }
+    return {
+        "id": item["id"],
+        "source_config": str(source),
+        "source_sha256": _sha256(source),
+        "input_size": item["input_size"],
+        "epochs": item["epochs"],
+        "batch_size": microbatch,
+        "reference_batch": item["batch_size"],
+        "reference_lr": item["reference_lr"],
+        "reference_gpu_count": matrix["reference_gpu_count"],
+        "single_gpu_count": matrix["single_gpu_count"],
+        "scaled_lr": training_config["LearningRate"]["base_lr"],
+        "classes": matrix["classes"],
+        "dataset_root": str((ROOT / matrix["dataset"]).resolve()),
+        "dev_annotations": str((ROOT / matrix["validation"]["dev"]).resolve()),
+        "gate_annotations": str((ROOT / matrix["validation"]["gate"]).resolve()),
+        "test_annotations": str((ROOT / matrix["validation"]["test"]).resolve()),
+        "seed": matrix["seed"],
+        "validation_interval": matrix["validation_interval"],
+        "early_stop": matrix["early_stop"],
+        "training_config": training_config,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--matrix", type=Path, default=MATRIX)
+    parser.add_argument("--upstream", type=Path, default=ROOT / "third_party/PaddleDetection")
+    parser.add_argument("--output", type=Path, default=OUTPUT)
+    args = parser.parse_args()
+    matrix_bytes = args.matrix.read_bytes()
+    matrix = yaml.safe_load(matrix_bytes)
+    if len(matrix["variants"]) != 9:
+        raise ValueError("PicoDet sweep must contain exactly 9 standard variants")
+    if not (ROOT / matrix["dataset"] / "annotations/instances_train.json").is_file():
+        raise FileNotFoundError("training COCO annotations are missing")
+    for split in ("dev", "gate", "test"):
+        if not (ROOT / matrix["validation"][split]).is_file():
+            raise FileNotFoundError(f"missing {split} annotations")
+    args.output.mkdir(parents=True, exist_ok=True)
+    inventory = {
+        "schema_version": 1,
+        "matrix_sha256": hashlib.sha256(matrix_bytes).hexdigest(),
+        "upstream_ref": matrix["upstream"]["ref"],
+        "variants": [],
+    }
+    for item in matrix["variants"]:
+        config = build_config(item, matrix, args.upstream)
+        config_path = args.output / f"{item['id']}.yml"
+        config_path.write_text(yaml.safe_dump(config.pop("training_config"), sort_keys=False), encoding="utf-8")
+        config["training_config_path"] = str(config_path)
+        manifest_path = args.output / f"{item['id']}.json"
+        manifest_path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        inventory["variants"].append({"id": item["id"], "path": str(manifest_path), "sha256": _sha256(manifest_path), "config": str(config_path), "config_sha256": _sha256(config_path)})
+    report = args.output.parent / "variant-inventory.json"
+    report.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(report)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
