@@ -11,6 +11,7 @@ import os
 import platform
 import random
 import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -125,6 +126,7 @@ def main() -> int:
         def __init__(self, model) -> None:
             super().__init__(model)
             self.best = float(progress["best_dev_map"])
+            self.best_observed = float(progress.get("best_observed_dev_map", self.best))
             self.bad_checks = int(progress["bad_checks"])
 
         def on_step_end(self, status) -> None:
@@ -149,6 +151,7 @@ def main() -> int:
             if len(results["bbox"]) > 2:
                 writer.add_scalar("dev/AP75", float(results["bbox"][2]), epoch)
             improved = map_value > self.best + float(manifest["early_stop"]["min_delta"])
+            self.best_observed = max(self.best_observed, map_value)
             if improved:
                 self.best = map_value
                 self.bad_checks = 0
@@ -156,6 +159,7 @@ def main() -> int:
                 self.bad_checks += 1
             progress.update({
                 "best_dev_map": self.best,
+                "best_observed_dev_map": self.best_observed,
                 "bad_checks": self.bad_checks,
                 "history": [*progress["history"], {"epoch": epoch, "mAP": map_value, "improved": improved}],
             })
@@ -174,6 +178,7 @@ def main() -> int:
         "config_sha256": sha256(copied_config),
         "upstream": str(args.upstream),
         "upstream_ref": "b25522a0f4bde8c80603f3ba5e3472059972e3b5",
+        "project_git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "pretrained": weight_record,
         "environment": {
             "python": sys.version,
@@ -203,6 +208,7 @@ def main() -> int:
         "schema_version": 1,
         "status": status,
         "best_dev_map": callback.best,
+        "best_observed_dev_map": callback.best_observed,
         "early_stop": {"bad_checks": callback.bad_checks, **manifest["early_stop"]},
     })
     return 0

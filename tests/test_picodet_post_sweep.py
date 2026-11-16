@@ -34,6 +34,7 @@ class PicoDetPostSweepTest(unittest.TestCase):
                 run = root / variant
                 run.mkdir()
                 (run / "training-summary.json").write_text(json.dumps({"status": "early_stopped", "best_dev_map": score}))
+                (run / "training-progress.json").write_text(json.dumps({"history": [{"mAP": score + 0.001}]}))
                 state["variants"][variant] = {"status": "trained", "run_dir": str(run)}
             state_path = root / "state.json"
             state_path.write_text(json.dumps(state))
