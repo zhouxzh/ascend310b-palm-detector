@@ -68,6 +68,14 @@ def main() -> int:
     config_path = Path(manifest["training_config_path"])
     if not config_path.is_file() or not (args.upstream / "tools/train.py").is_file():
         raise FileNotFoundError("generated config or pinned PaddleDetection checkout is missing")
+    weights_path = ROOT / "artifacts/picodet-v001/pretrained/weights.json"
+    if not weights_path.is_file():
+        raise FileNotFoundError("run scripts/acquire_picodet_pretrained.py before training")
+    weight_record = json.loads(weights_path.read_text(encoding="utf-8"))["weights"].get(manifest["pretrained"]["id"])
+    if weight_record is None or not Path(weight_record["path"]).is_file():
+        raise FileNotFoundError("verified pretraining weight is missing")
+    if sha256(Path(weight_record["path"])) != weight_record["sha256"] or Path(weight_record["path"]).stat().st_size != weight_record["bytes"]:
+        raise ValueError("verified pretraining weight checksum or byte count changed")
 
     sys.path.insert(0, str(args.upstream))
     import paddle
@@ -93,6 +101,7 @@ def main() -> int:
 
     cfg = load_config(str(config_path))
     cfg.save_dir = str(save_dir)
+    cfg.output_eval = str(args.run_dir / "dev-eval")
     cfg.vdl_log_dir = str(args.run_dir / "visualdl")
     cfg.use_vdl = False
     cfg.use_gpu = True
@@ -100,7 +109,7 @@ def main() -> int:
     cfg.seed = args.seed
     if cfg.num_classes != 2:
         raise ValueError("generated PicoDet config did not set two classes")
-    if any(item.get("RandomFlip", {}).get("prob") not in (None, 0.0) for item in cfg.TrainReader.sample_transforms):
+    if any(item.get("RandomFlip", {}).get("prob") not in (None, 0.0) for item in cfg["TrainReader"]["sample_transforms"]):
         raise ValueError("horizontal flip must remain disabled for anatomical classes")
 
     progress = {"schema_version": 1, "variant": manifest["id"], "best_dev_map": float("-inf"), "bad_checks": 0, "history": []}
@@ -165,6 +174,7 @@ def main() -> int:
         "config_sha256": sha256(copied_config),
         "upstream": str(args.upstream),
         "upstream_ref": "b25522a0f4bde8c80603f3ba5e3472059972e3b5",
+        "pretrained": weight_record,
         "environment": {
             "python": sys.version,
             "platform": platform.platform(),

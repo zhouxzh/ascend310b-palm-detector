@@ -20,3 +20,12 @@ the sweep after three consecutive samples at or above 82C. The completed
 models will be ranked by dev mAP; the top three receive controlled
 learning-rate and weight-decay tuning, while all nine receive static batch-1
 ONNX export and inference-consistency checks.
+
+Use the readiness check before starting the serial sweep:
+
+```bash
+conda run -n palm-picodet scripts/run_with_host_nvidia.sh python scripts/check_picodet_training_readiness.py
+./scripts/start_picodet_tensorboard.sh 6007
+./scripts/monitor_picodet_gpu.sh 30 82 artifacts/picodet-v001/gpu-monitor.csv
+conda run -n palm-picodet scripts/run_picodet_sweep.py
+```

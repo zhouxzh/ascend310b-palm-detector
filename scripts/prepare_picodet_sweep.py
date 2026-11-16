@@ -30,6 +30,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
     # Keep the upstream config as a base. Runtime overrides are emitted as a
     # separate JSON command manifest so upstream YAML tags remain untouched.
     size = int(item["input_size"])
+    pretrained = matrix["pretrained"][item["pretrained"]]
     microbatch = int(item["batch_size"])
     training_config = {
         "_BASE_": [str(source.resolve())],
@@ -92,11 +93,13 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
             "batch_size": 1,
         },
         "LearningRate": {"base_lr": round(item["reference_lr"] * matrix["single_gpu_count"] / matrix["reference_gpu_count"], 8)},
+        "pretrain_weights": str((ROOT / "artifacts/picodet-v001/pretrained" / pretrained["filename"]).resolve()),
     }
     return {
         "id": item["id"],
         "source_config": str(source),
         "source_sha256": _sha256(source),
+        "pretrained": {**pretrained, "id": item["pretrained"]},
         "input_size": item["input_size"],
         "epochs": item["epochs"],
         "batch_size": microbatch,

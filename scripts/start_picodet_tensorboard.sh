@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly PORT="${1:-6007}"
+readonly LOG_DIR="$ROOT/artifacts/picodet-v001/tensorboard"
+readonly RUNS_DIR="$ROOT/artifacts/picodet-v001/runs"
+
+mkdir -p "$LOG_DIR" "$RUNS_DIR"
+if ss -ltn 2>/dev/null | grep -q ":${PORT} "; then
+  echo "TensorBoard port ${PORT} is already in use" >&2
+  exit 1
+fi
+setsid "$HOME/anaconda3/envs/palm-picodet/bin/tensorboard" \
+  --logdir_spec "picodet=$RUNS_DIR" --host 127.0.0.1 --port "$PORT" \
+  >"$LOG_DIR/server.log" 2>&1 < /dev/null &
+echo $! >"$LOG_DIR/server.pid"
+for _ in {1..15}; do
+  if curl --connect-timeout 1 --max-time 2 -fsS "http://127.0.0.1:${PORT}/" >/dev/null; then
+    echo "TensorBoard: http://127.0.0.1:${PORT}"
+    exit 0
+  fi
+  sleep 1
+done
+cat "$LOG_DIR/server.log" >&2 || true
+exit 1

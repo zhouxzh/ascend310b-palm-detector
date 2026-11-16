@@ -36,14 +36,16 @@ class PreparePicoDetSweepTest(unittest.TestCase):
                 "seed": 42,
                 "validation_interval": 5,
                 "early_stop": {"patience": 8, "min_delta": 0.001},
+                "pretrained": {"lcnet-x075": {"url": "https://weights.invalid/x075", "filename": "x075.pdparams"}},
             }
             item = {
                 "id": "picodet-s-320", "config": "configs/picodet/picodet_s_320_coco_lcnet.yml",
-                "input_size": 320, "batch_size": 64, "reference_lr": 0.32, "epochs": 300,
+                "input_size": 320, "batch_size": 64, "reference_lr": 0.32, "epochs": 300, "pretrained": "lcnet-x075",
             }
             manifest = module.build_config(item, matrix, upstream)
             generated = manifest["training_config"]
             self.assertEqual(generated["num_classes"], 2)
+            self.assertEqual(manifest["pretrained"]["filename"], "x075.pdparams")
             self.assertEqual(generated["TrainReader"]["batch_size"], 64)
             self.assertEqual(generated["LearningRate"]["base_lr"], 0.08)
             transforms = generated["TrainReader"]["sample_transforms"]
