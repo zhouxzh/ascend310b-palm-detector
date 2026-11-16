@@ -92,6 +92,10 @@ model predictions a thin box in the same class color.
 
 ## Train, evaluate, and export
 
+The exact NanoDet/PicoDet optimizer, warmup, learning-rate schedule, batch
+scaling, epoch limits, selected ONNX candidates, and TensorBoard retention
+policy are recorded in [docs/10-training-recipes-and-retention.md](docs/10-training-recipes-and-retention.md).
+
 Before training, fill a real immutable pretrained-weight manifest from
 `data/manifests/pretrained-weights.template.json`. Its file hash must match the
 checkpoint passed to the launcher.

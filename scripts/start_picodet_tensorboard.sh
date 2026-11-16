@@ -12,8 +12,8 @@ if ss -ltn 2>/dev/null | grep -q ":${PORT} "; then
   echo "TensorBoard port ${PORT} is already in use" >&2
   exit 1
 fi
-# tensorboardX event files are compatible with the already pinned TensorBoard
-# server in palm-nanodet; this avoids duplicating TensorBoard dependencies.
+# TensorBoard scans only retained final event files plus any active run event.
+# tensorboardX files are compatible with the pinned TensorBoard server.
 setsid "$HOME/anaconda3/envs/palm-nanodet/bin/tensorboard" \
   --logdir_spec "nanodet:$NANODET_RUNS_DIR,picodet:$PICODET_RUNS_DIR" \
   --reload_interval 5 --host 127.0.0.1 --port "$PORT" \
