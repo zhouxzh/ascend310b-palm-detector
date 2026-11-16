@@ -4,9 +4,10 @@ set -euo pipefail
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly PORT="${1:-6007}"
 readonly LOG_DIR="$ROOT/artifacts/picodet-v001/tensorboard"
-readonly RUNS_DIR="$ROOT/artifacts/picodet-v001/runs"
+readonly NANODET_RUNS_DIR="$ROOT/artifacts/runs"
+readonly PICODET_RUNS_DIR="$ROOT/artifacts/picodet-v001/runs"
 
-mkdir -p "$LOG_DIR" "$RUNS_DIR"
+mkdir -p "$LOG_DIR" "$NANODET_RUNS_DIR" "$PICODET_RUNS_DIR"
 if ss -ltn 2>/dev/null | grep -q ":${PORT} "; then
   echo "TensorBoard port ${PORT} is already in use" >&2
   exit 1
@@ -14,7 +15,8 @@ fi
 # tensorboardX event files are compatible with the already pinned TensorBoard
 # server in palm-nanodet; this avoids duplicating TensorBoard dependencies.
 setsid "$HOME/anaconda3/envs/palm-nanodet/bin/tensorboard" \
-  --logdir_spec "picodet=$RUNS_DIR" --host 127.0.0.1 --port "$PORT" \
+  --logdir_spec "nanodet:$NANODET_RUNS_DIR,picodet:$PICODET_RUNS_DIR" \
+  --reload_interval 5 --host 127.0.0.1 --port "$PORT" \
   >"$LOG_DIR/server.log" 2>&1 < /dev/null &
 echo $! >"$LOG_DIR/server.pid"
 for _ in {1..15}; do

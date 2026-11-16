@@ -19,7 +19,7 @@ if ss -ltn 2>/dev/null | grep -q ":${PORT} "; then
   exit 1
 fi
 setsid "$HOME/anaconda3/envs/palm-nanodet/bin/tensorboard" \
-  --logdir_spec "sweep=$RUNS_DIR" \
+  --logdir_spec "sweep:$RUNS_DIR" \
   --host 127.0.0.1 \
   --port "$PORT" \
   >"$LOG_DIR/server.log" 2>&1 < /dev/null &
