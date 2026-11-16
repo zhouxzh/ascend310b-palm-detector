@@ -11,7 +11,8 @@ serially on GPU 0, validates every five epochs, and stops after eight
 validation checks without a `0.001` mAP improvement.
 
 The RTX 5090 requires the validated CUDA 12.9 Paddle nightly recorded in
-`scripts/setup_picodet_env.sh`. Stable Paddle `3.3.1/cu126` exposed CUDA but
+`scripts/setup_unified_env.sh`, which installs it into the unified `palm-nanodet`
+environment. Stable Paddle `3.3.1/cu126` exposed CUDA but
 returned incorrect elementwise GPU results during the mandatory tensor gate;
 do not substitute it.
 
@@ -24,8 +25,8 @@ ONNX export and inference-consistency checks.
 Use the readiness check before starting the serial sweep:
 
 ```bash
-conda run -n palm-picodet scripts/run_with_host_nvidia.sh python scripts/check_picodet_training_readiness.py
+conda run -n palm-nanodet scripts/run_with_host_nvidia.sh python scripts/check_picodet_training_readiness.py
 ./scripts/start_picodet_tensorboard.sh 6007
 ./scripts/monitor_picodet_gpu.sh 30 82 artifacts/picodet-v001/gpu-monitor.csv
-conda run -n palm-picodet scripts/run_picodet_sweep.py
+conda run -n palm-nanodet scripts/run_picodet_sweep.py
 ```

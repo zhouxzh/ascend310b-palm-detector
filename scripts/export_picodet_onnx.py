@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -25,12 +26,46 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def prepare_pir_for_paddle2onnx(model_file: Path, conversion_dir: Path) -> tuple[Path, int]:
+    """Make a converter-only copy with PicoDet resize scales in float32.
+
+    Paddle 3.5 emits the constant ``scale=[2.0, 2.0]`` for nearest-neighbor
+    upsampling as float64. Paddle2ONNX 2.1.0's PIR parser only accepts float32
+    arrays for that attribute. The scale is exactly representable in float32;
+    keep the original export intact and patch only the converter input copy.
+    """
+    conversion_dir.mkdir(parents=True, exist_ok=True)
+    converted_model = conversion_dir / model_file.name
+    shutil.copy2(model_file, converted_model)
+    params_file = model_file.with_name("model.pdiparams")
+    shutil.copy2(params_file, conversion_dir / params_file.name)
+    payload = json.loads(converted_model.read_text(encoding="utf-8"))
+    patched = 0
+    for op in payload["program"]["regions"][0]["blocks"][0]["ops"]:
+        if op.get("#") != "1.nearest_interp":
+            continue
+        for attribute in op.get("A", []):
+            if not isinstance(attribute, dict) or attribute.get("N") != "scale":
+                continue
+            values = attribute.get("AT", {}).get("D", [])
+            for value in values:
+                if value.get("#") == "0.a_f64" and value.get("D") == 2.0:
+                    value["#"] = "0.a_f32"
+                    patched += 1
+    if patched != 4:
+        raise ValueError(f"expected four PicoDet float64 resize scales, patched {patched}")
+    converted_model.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    return converted_model, patched
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--upstream", type=Path, default=ROOT / "third_party/PaddleDetection")
     parser.add_argument("--samples", type=int, default=3)
     args = parser.parse_args()
+    args.run_dir = args.run_dir.resolve()
+    args.upstream = args.upstream.resolve()
     config_path = args.run_dir / "config.yml"
     checkpoint = args.run_dir / "paddle-output/best_model"
     if not checkpoint.with_suffix(".pdparams").is_file():
@@ -42,9 +77,10 @@ def main() -> int:
     env["PYTHONPATH"] = f"{args.upstream}:{env.get('PYTHONPATH', '')}"
     env["FLAGS_json_format_model"] = "1"
     command = [
-        sys.executable, str(args.upstream / "tools/export_model.py"), "-c", str(config_path),
+        sys.executable, str(args.upstream / "tools/export_model.py"), "-c", str(config_path.resolve()),
         "--output_dir", str(export_root), "-o", f"weights={checkpoint}",
         "export.post_process=False", "export.nms=False", "export.benchmark=True",
+        "export_with_pir=True",
     ]
     subprocess.run(command, cwd=args.upstream, env=env, check=True)
     candidates = sorted(export_root.rglob("model.json")) + sorted(export_root.rglob("model.pdmodel"))
@@ -52,9 +88,11 @@ def main() -> int:
         raise ValueError(f"expected exactly one Paddle inference model, found: {candidates}")
     model_file = candidates[0]
     params_file = model_file.with_name("model.pdiparams")
+    conversion_model, conversion_patch_count = prepare_pir_for_paddle2onnx(
+        model_file, args.run_dir / "onnx-conversion")
     onnx_path = args.run_dir / f"picodet-{width}x{height}.onnx"
     subprocess.run([
-        "paddle2onnx", "--model_dir", str(model_file.parent), "--model_filename", model_file.name,
+        "paddle2onnx", "--model_dir", str(conversion_model.parent), "--model_filename", conversion_model.name,
         "--params_filename", params_file.name, "--opset_version", "11", "--save_file", str(onnx_path),
     ], cwd=ROOT, env=env, check=True)
     import onnx
@@ -66,7 +104,7 @@ def main() -> int:
     inputs = [{"name": item.name, "shape": [dim.dim_value or dim.dim_param for dim in item.type.tensor_type.shape.dim]} for item in model.graph.input]
     outputs = [{"name": item.name, "shape": [dim.dim_value or dim.dim_param for dim in item.type.tensor_type.shape.dim]} for item in model.graph.output]
     paddle.set_device("gpu:0")
-    predictor_config = paddle.inference.Config(str(model_file), str(params_file))
+    predictor_config = paddle.inference.Config(str(model_file.resolve()), str(params_file.resolve()))
     predictor_config.disable_glog_info()
     predictor_config.disable_gpu()
     predictor = paddle.inference.create_predictor(predictor_config)
@@ -91,6 +129,7 @@ def main() -> int:
         "schema_version": 1, "valid": all(item["max_abs_error"] <= 1e-4 for item in samples),
         "onnx": str(onnx_path), "sha256": sha256(onnx_path), "input": [1, 3, height, width],
         "paddle_model": str(model_file), "inputs": inputs, "outputs": outputs, "samples": samples,
+        "paddle2onnx_compatibility_patch_count": conversion_patch_count,
     }
     report_path = args.run_dir / "picodet-onnx-check.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

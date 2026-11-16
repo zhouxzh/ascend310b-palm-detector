@@ -1,8 +1,6 @@
-name: palm-picodet
+name: palm-nanodet
 channels:
   - conda-forge
 dependencies:
   - python=3.11
   - pip=24.0
-  - pip:
-      - -r requirements.picodet.txt

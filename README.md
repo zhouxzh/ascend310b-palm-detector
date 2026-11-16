@@ -40,10 +40,11 @@ Use a dedicated environment; do not mutate the system Python, system CUDA, or
 the Atlas CANN installation.
 
 ```bash
-conda env create -f environment.nanodet.yml
+conda env create -f environment.yml
 conda activate palm-nanodet
 ./scripts/fetch_nanodet.sh
-pip install --no-deps -e third_party/nanodet
+./scripts/fetch_paddledetection.sh
+./scripts/setup_unified_env.sh palm-nanodet
 ./scripts/acquire_nanodet_pretrained.sh
 ```
 
@@ -51,9 +52,11 @@ NanoDet is fetched, rather than committed, at the exact upstream revision in
 [docs/05-upstream-nanodet.md](docs/05-upstream-nanodet.md).
 
 The verified direct Python dependency set is also in
-`requirements.nanodet.txt`. On this server, `palm-nanodet` was cloned from the
-existing CUDA 12.8 `torch` environment because it already matched the RTX 5090
-D; the project startup wrapper then selects the matching host driver library.
+`requirements.txt`. On this server, `palm-nanodet` is the single shared
+environment for NanoDet, PicoDet, ONNX export, and future YOLO training. Run
+`scripts/setup_unified_env.sh` rather than invoking `pip install -r` directly:
+the two verified framework wheels use different CUDA runtime metadata, so the
+script preserves their known-good binaries and validates real GPU arithmetic.
 
 ## Data preparation
 

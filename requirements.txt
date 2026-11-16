@@ -1,0 +1,72 @@
+# Shared Python packages for the single palm-nanodet environment.
+#
+# Framework binaries are installed by scripts/setup_unified_env.sh because the
+# verified PyTorch CUDA 12.8 and Paddle CUDA 12.9 wheels have mutually
+# exclusive NVIDIA dependency metadata. The setup script installs the exact
+# binaries first, then installs this file with --no-deps and validates actual
+# GPU arithmetic for both frameworks.
+#
+# Verified framework binaries:
+#   torch==2.8.0+cu128
+#   torchvision==0.23.0+cu128
+#   paddlepaddle-gpu==3.5.0.dev20261113+12c390870c2
+
+numpy==1.26.4
+Cython==3.3.1
+matplotlib==3.11.2
+mediapipe==0.10.35
+omegaconf==2.3.0
+onnx==1.17.0
+onnx-simplifier==0.4.36
+onnxoptimizer==0.3.13
+onnxruntime-gpu==1.32.0
+opencv-python==4.5.5.64
+Pillow==13.0.0
+pyaml==23.12.0
+pyclipper==1.4.0
+pycocotools==2.0.8
+pytorch-lightning==1.9.5
+PyYAML==6.0.3
+scikit-image==0.26.0
+scikit-learn==1.9.1
+scipy==1.17.1
+setuptools==80.10.2
+shapely==2.2.0
+sklearn==0.0
+tabulate==0.9.0
+tensorboard==2.20.0
+tensorboardX==2.6.4
+termcolor==2.4.0
+tifffile==2026.3.3
+torchmetrics==1.8.2
+tqdm==4.70.1
+typeguard==4.6.0
+
+# PicoDet export and PaddleDetection support packages.
+bce-python-sdk==0.9.79
+Babel==2.18.0
+blinker==1.9.0
+cloudpickle==3.1.2
+crc32c==2.9.post0
+Flask==3.1.3
+flask-babel==4.0.0
+future==1.0.0
+imageio==2.38.1
+xmltodict==1.0.4
+imgaug==0.4.0
+itsdangerous==2.2.0
+joblib==1.6.0
+lapx==0.13.1
+lazy-loader==0.6
+motmetrics==1.4.0
+narwhals==2.28.0
+onnxsim==0.8.1
+paddle2onnx==2.1.0
+packaging==26.3
+opencv-contrib-python==4.5.5.64
+psutil==7.2.2
+polygraphy==0.53.6
+rarfile==4.5
+terminaltables==3.1.10
+threadpoolctl==3.8.0
+visualdl==2.5.3
