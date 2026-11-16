@@ -1,4 +1,4 @@
-"""Deployment-side preprocessing and DFL/NMS decoding for static NanoDet-Plus."""
+"""Deployment-side preprocessing and DFL/NMS decoding for static NanoDet."""
 
 from __future__ import annotations
 
@@ -29,18 +29,31 @@ class Detection:
         return self.class_names[self.label]
 
 
-def preprocess_bgr(image: np.ndarray) -> tuple[np.ndarray, tuple[float, float]]:
-    """Return NCHW model input and x/y scale from original pixels to 320 pixels."""
+def preprocess_bgr(
+    image: np.ndarray,
+    *,
+    input_size: tuple[int, int] = (INPUT_HEIGHT, INPUT_WIDTH),
+    mean: tuple[float, float, float] | np.ndarray = BGR_MEAN,
+    std: tuple[float, float, float] | np.ndarray = BGR_STD,
+) -> tuple[np.ndarray, tuple[float, float]]:
+    """Return NCHW input and x/y scale for an ``(height, width)`` model size."""
     if image.ndim != 3 or image.shape[2] != 3:
         raise ValueError("expected an HWC BGR image with three channels")
+    input_height, input_width = input_size
+    if input_height <= 0 or input_width <= 0:
+        raise ValueError("model input dimensions must be positive")
+    mean = np.asarray(mean, dtype=np.float32)
+    std = np.asarray(std, dtype=np.float32)
+    if mean.shape != (3,) or std.shape != (3,) or not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)) or np.any(std <= 0):
+        raise ValueError("mean and std must be finite BGR triplets with positive std")
     try:
         import cv2
     except ImportError as exc:
         raise RuntimeError("OpenCV is required for deployment preprocessing") from exc
     height, width = image.shape[:2]
-    resized = cv2.resize(image, (INPUT_WIDTH, INPUT_HEIGHT), interpolation=cv2.INTER_LINEAR)
-    normalized = (resized.astype(np.float32) - BGR_MEAN) / BGR_STD
-    return normalized.transpose(2, 0, 1)[None, ...], (INPUT_WIDTH / width, INPUT_HEIGHT / height)
+    resized = cv2.resize(image, (input_width, input_height), interpolation=cv2.INTER_LINEAR)
+    normalized = (resized.astype(np.float32) - mean) / std
+    return normalized.transpose(2, 0, 1)[None, ...], (input_width / width, input_height / height)
 
 
 def _sigmoid(values: np.ndarray) -> np.ndarray:
@@ -53,15 +66,25 @@ def _softmax(values: np.ndarray) -> np.ndarray:
     return exp / exp.sum(axis=-1, keepdims=True)
 
 
-def center_priors(input_height: int = INPUT_HEIGHT, input_width: int = INPUT_WIDTH) -> np.ndarray:
+def center_priors(
+    input_height: int = INPUT_HEIGHT,
+    input_width: int = INPUT_WIDTH,
+    *,
+    strides: tuple[int, ...] = STRIDES,
+    center_offset: float = 0.0,
+) -> np.ndarray:
+    if input_height <= 0 or input_width <= 0 or not strides or any(stride <= 0 for stride in strides):
+        raise ValueError("input dimensions and strides must be positive")
+    if center_offset not in (0.0, 0.5):
+        raise ValueError("center_offset must be 0.0 (Plus) or 0.5 (legacy)")
     priors: list[np.ndarray] = []
-    for stride in STRIDES:
+    for stride in strides:
         feature_height = int(np.ceil(input_height / stride))
         feature_width = int(np.ceil(input_width / stride))
         yy, xx = np.meshgrid(np.arange(feature_height), np.arange(feature_width), indexing="ij")
         priors.append(
             np.stack(
-                (xx.reshape(-1) * stride, yy.reshape(-1) * stride, np.full(xx.size, stride)),
+                ((xx.reshape(-1) + center_offset) * stride, (yy.reshape(-1) + center_offset) * stride, np.full(xx.size, stride)),
                 axis=1,
             )
         )
@@ -93,32 +116,39 @@ def decode_nanodet_plus(
     output: np.ndarray,
     *,
     class_names: tuple[str, ...] = CLASS_NAMES,
+    input_size: tuple[int, int] = (INPUT_HEIGHT, INPUT_WIDTH),
+    strides: tuple[int, ...] = STRIDES,
+    reg_max: int = REG_MAX,
+    center_offset: float = 0.0,
     score_threshold: float = 0.35,
     nms_iou_threshold: float = 0.6,
     scores_are_logits: bool = False,
     original_size: tuple[int, int] | None = None,
 ) -> list[list[Detection]]:
-    """Decode raw NanoDet Plus output `[N, 2125, 34]` without ONNX NMS ops."""
+    """Decode Plus or legacy raw output without ONNX NMS ops."""
     output = np.asarray(output, dtype=np.float32)
     if not class_names:
         raise ValueError("class_names must not be empty")
+    if reg_max < 1:
+        raise ValueError("reg_max must be positive")
+    input_height, input_width = input_size
     num_classes = len(class_names)
-    expected_channels = num_classes + 4 * (REG_MAX + 1)
-    priors = center_priors()
+    expected_channels = num_classes + 4 * (reg_max + 1)
+    priors = center_priors(input_height, input_width, strides=strides, center_offset=center_offset)
     if output.ndim != 3 or output.shape[1:] != (len(priors), expected_channels):
         raise ValueError(f"expected [N, {len(priors)}, {expected_channels}] NanoDet output, got {output.shape}")
     class_scores = output[:, :, :num_classes]
     if scores_are_logits:
         class_scores = _sigmoid(class_scores)
-    distributions = output[:, :, num_classes:].reshape(output.shape[0], len(priors), 4, REG_MAX + 1)
-    distances = (_softmax(distributions) * np.arange(REG_MAX + 1, dtype=np.float32)).sum(axis=-1) * priors[None, :, 2:3]
+    distributions = output[:, :, num_classes:].reshape(output.shape[0], len(priors), 4, reg_max + 1)
+    distances = (_softmax(distributions) * np.arange(reg_max + 1, dtype=np.float32)).sum(axis=-1) * priors[None, :, 2:3]
     boxes = np.concatenate((priors[None, :, :2] - distances[:, :, :2], priors[None, :, :2] + distances[:, :, 2:]), axis=-1)
-    boxes[:, :, [0, 2]] = np.clip(boxes[:, :, [0, 2]], 0, INPUT_WIDTH)
-    boxes[:, :, [1, 3]] = np.clip(boxes[:, :, [1, 3]], 0, INPUT_HEIGHT)
+    boxes[:, :, [0, 2]] = np.clip(boxes[:, :, [0, 2]], 0, input_width)
+    boxes[:, :, [1, 3]] = np.clip(boxes[:, :, [1, 3]], 0, input_height)
     if original_size is not None:
         original_height, original_width = original_size
-        boxes[:, :, [0, 2]] *= original_width / INPUT_WIDTH
-        boxes[:, :, [1, 3]] *= original_height / INPUT_HEIGHT
+        boxes[:, :, [0, 2]] *= original_width / input_width
+        boxes[:, :, [1, 3]] *= original_height / input_height
     decoded: list[list[Detection]] = []
     for batch_boxes, batch_scores in zip(boxes, class_scores):
         detections: list[Detection] = []

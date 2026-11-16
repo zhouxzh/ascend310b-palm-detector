@@ -21,11 +21,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     load_config(cfg, str(args.config))
+    input_width, input_height = (int(value) for value in cfg.data.val.input_size)
+    if input_width <= 0 or input_height <= 0 or cfg.data.train.input_size != cfg.data.val.input_size:
+        raise ValueError("training and validation must share a positive static input size")
     model = build_model(cfg.model).eval()
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     load_model_weight(model, checkpoint, Logger(-1, str(args.output.parent), False))
-    dummy = torch.randn(1, 3, 320, 320)
+    dummy = torch.randn(1, 3, input_height, input_width)
     torch.onnx.export(
         model,
         dummy,

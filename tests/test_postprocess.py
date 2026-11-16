@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from palm_detector.postprocess import INPUT_HEIGHT, INPUT_WIDTH, center_priors, decode_nanodet_plus
+from palm_detector.postprocess import INPUT_HEIGHT, INPUT_WIDTH, center_priors, decode_nanodet_plus, preprocess_bgr
 
 
 class PostprocessTest(unittest.TestCase):
@@ -50,3 +50,54 @@ class PostprocessTest(unittest.TestCase):
                 expected = (prior[0] * 480 / 320, prior[1] * 640 / 320)
                 self.assertAlmostEqual(detected.xyxy[0], expected[0], places=4)
                 self.assertAlmostEqual(detected.xyxy[1], expected[1], places=4)
+
+    def test_multisize_preprocessing_and_prior_counts(self) -> None:
+        image = np.zeros((800, 400, 3), dtype=np.uint8)
+        for size, plus_count, legacy_count in ((320, 2125, 2100), (416, 3598, 3549), (512, 5440, 5376), (640, 8500, 8400)):
+            with self.subTest(size=size):
+                tensor, scale = preprocess_bgr(image, input_size=(size, size))
+                self.assertEqual(tensor.shape, (1, 3, size, size))
+                self.assertEqual(scale, (size / 400, size / 800))
+                self.assertEqual(center_priors(size, size).shape, (plus_count, 3))
+                self.assertEqual(center_priors(size, size, strides=(8, 16, 32), center_offset=0.5).shape, (legacy_count, 3))
+
+    def test_preprocessing_respects_configured_normalization(self) -> None:
+        image = np.full((32, 16, 3), (127, 128, 129), dtype=np.uint8)
+        tensor, _ = preprocess_bgr(image, input_size=(416, 416), mean=(127, 128, 129), std=(128, 128, 128))
+        self.assertEqual(tensor.shape, (1, 3, 416, 416))
+        self.assertTrue(np.all(tensor == 0))
+        with self.assertRaisesRegex(ValueError, "mean and std"):
+            preprocess_bgr(image, std=(1, 0, 1))
+
+    def test_legacy_half_cell_origin_and_ten_bin_regression(self) -> None:
+        size = 416
+        strides = (8, 16, 32)
+        priors = center_priors(size, size, strides=strides, center_offset=0.5)
+        np.testing.assert_array_equal(priors[0], [4, 4, 8])
+        np.testing.assert_array_equal(priors[52 * 52], [8, 8, 16])
+        output = np.zeros((1, len(priors), 2 + 4 * 11), dtype=np.float32)
+        index = 100
+        output[0, index, 0] = 0.95
+        output[0, index, 2:] = -50
+        output[0, index, [2, 13, 24, 35]] = 50
+        result = decode_nanodet_plus(
+            output, input_size=(size, size), strides=strides, reg_max=10,
+            center_offset=0.5, score_threshold=0.9, original_size=(832, 624),
+        )[0][0]
+        self.assertAlmostEqual(result.xyxy[0], priors[index, 0] * 624 / size)
+        self.assertAlmostEqual(result.xyxy[1], priors[index, 1] * 832 / size)
+        with self.assertRaisesRegex(ValueError, "expected"):
+            decode_nanodet_plus(output, input_size=(size, size), strides=strides, reg_max=7, center_offset=0.5)
+
+    def test_plus_640_coordinates_rescale_to_source_image(self) -> None:
+        size = 640
+        priors = center_priors(size, size)
+        index = 95
+        output = np.zeros((1, len(priors), 34), dtype=np.float32)
+        output[0, index, 1] = 0.99
+        output[0, index, 2:] = -50
+        output[0, index, [2, 10, 18, 26]] = 50
+        result = decode_nanodet_plus(output, input_size=(size, size), original_size=(960, 1280), score_threshold=0.9)[0][0]
+        self.assertEqual(result.class_name, "right_palm")
+        self.assertAlmostEqual(result.xyxy[0], priors[index, 0] * 2)
+        self.assertAlmostEqual(result.xyxy[1], priors[index, 1] * 1.5)

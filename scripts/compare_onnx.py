@@ -15,15 +15,15 @@ import torch
 from palm_detector.postprocess import decode_nanodet_plus, detections_to_json, preprocess_bgr
 
 
-def _export_equivalent_output(pytorch_output: np.ndarray) -> np.ndarray:
-    """Mirror NanoDetPlusHead._forward_onnx for raw tensor comparison.
+def _export_equivalent_output(pytorch_output: np.ndarray, num_classes: int = 2) -> np.ndarray:
+    """Mirror NanoDetHead and NanoDetPlusHead ONNX forward class sigmoid.
 
     Normal PyTorch forward returns class logits; the static ONNX branch applies
-    sigmoid to the first two channels before concatenating unmodified DFL bins.
+    sigmoid to the class channels before concatenating unmodified DFL bins.
     """
     converted = np.array(pytorch_output, copy=True)
-    logits = converted[:, :, :2]
-    converted[:, :, :2] = 1.0 / (1.0 + np.exp(-np.clip(logits, -80.0, 80.0)))
+    logits = converted[:, :, :num_classes]
+    converted[:, :, :num_classes] = 1.0 / (1.0 + np.exp(-np.clip(logits, -80.0, 80.0)))
     return converted
 
 
@@ -72,6 +72,18 @@ def main() -> int:
     import onnxruntime as ort
 
     load_config(cfg, str(args.config))
+    if cfg.data.val.keep_ratio:
+        raise ValueError("compare_onnx requires direct-resize validation preprocessing (keep_ratio=false)")
+    input_width, input_height = (int(value) for value in cfg.data.val.input_size)
+    mean, std = (tuple(values) for values in cfg.data.val.pipeline.normalize)
+    head = cfg.model.arch.head
+    decode_options = {
+        "class_names": tuple(cfg.class_names),
+        "input_size": (input_height, input_width),
+        "strides": tuple(int(value) for value in head.strides),
+        "reg_max": int(head.reg_max),
+        "center_offset": 0.0 if cfg.model.arch.name == "NanoDetPlus" else 0.5,
+    }
     model = build_model(cfg.model).eval()
     load_model_weight(model, torch.load(args.checkpoint, map_location="cpu"), Logger(-1, str(args.output.parent), False))
     session = ort.InferenceSession(str(args.onnx), providers=["CPUExecutionProvider"])
@@ -82,19 +94,19 @@ def main() -> int:
             image = cv2.imread(str(image_path))
             if image is None:
                 raise ValueError(f"cannot read image {image_path}")
-            tensor, _ = preprocess_bgr(image)
+            tensor, _ = preprocess_bgr(image, input_size=(input_height, input_width), mean=mean, std=std)
             pytorch_logits = model(torch.from_numpy(tensor)).numpy()
-            pytorch_output = _export_equivalent_output(pytorch_logits)
+            pytorch_output = _export_equivalent_output(pytorch_logits, len(cfg.class_names))
             onnx_output = session.run(["output"], {"data": tensor})[0]
             difference = np.abs(pytorch_output - onnx_output)
             max_error = float(difference.max())
-            decoded_torch = detections_to_json(decode_nanodet_plus(pytorch_logits, scores_are_logits=True, original_size=image.shape[:2])[0])
-            decoded_onnx = detections_to_json(decode_nanodet_plus(onnx_output, original_size=image.shape[:2])[0])
+            decoded_torch = detections_to_json(decode_nanodet_plus(pytorch_logits, scores_are_logits=True, original_size=image.shape[:2], **decode_options)[0])
+            decoded_onnx = detections_to_json(decode_nanodet_plus(onnx_output, original_size=image.shape[:2], **decode_options)[0])
             decoded_match, minimum_iou = _compare_detections(decoded_torch, decoded_onnx, args.minimum_decoded_iou)
             passed = max_error <= args.max_abs_error and decoded_match
             all_ok = all_ok and passed
             report_images.append({"image": str(image_path), "raw_max_abs_error": max_error, "raw_mean_abs_error": float(difference.mean()), "decoded_class_and_iou_match": decoded_match, "decoded_minimum_iou": minimum_iou, "pytorch_detections": decoded_torch, "onnx_detections": decoded_onnx, "passed": passed})
-    report = {"valid": all_ok, "raw_tensor_contract": "PyTorch class logits sigmoid-transformed to match NanoDet ONNX export; DFL bins unchanged", "max_abs_error_limit": args.max_abs_error, "decoded_iou_limit": args.minimum_decoded_iou, "images": report_images}
+    report = {"valid": all_ok, "raw_tensor_contract": "PyTorch class logits sigmoid-transformed to match NanoDet ONNX export; DFL bins unchanged", "input_size": [input_width, input_height], "strides": list(decode_options["strides"]), "reg_max": decode_options["reg_max"], "center_offset": decode_options["center_offset"], "max_abs_error_limit": args.max_abs_error, "decoded_iou_limit": args.minimum_decoded_iou, "images": report_images}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {args.output}: {'PASS' if all_ok else 'FAIL'}")

@@ -9,8 +9,10 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 from .dataset_contract import sha256_file
-from .postprocess import decode_nanodet_plus, detections_to_json, preprocess_bgr
+from .postprocess import center_priors, decode_nanodet_plus, detections_to_json, preprocess_bgr
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,12 @@ class ReviewModel:
     sha256: str
     class_names: tuple[str, ...]
     label: str
+    input_size: tuple[int, int]
+    strides: tuple[int, ...]
+    reg_max: int
+    center_offset: float
+    mean: tuple[float, float, float]
+    std: tuple[float, float, float]
 
     def public(self) -> dict[str, object]:
         return {"id": self.id, "label": self.label, "run_id": self.id, "class_names": list(self.class_names), "sha256": self.sha256}
@@ -35,17 +43,32 @@ class OnnxReviewModels:
         for report_path in runs_root.glob("*/onnx-check.json"):
             try:
                 report = json.loads(report_path.read_text(encoding="utf-8"))
+                config = yaml.safe_load((report_path.parent / "config.yml").read_text(encoding="utf-8"))
+                head = config["model"]["arch"]["head"]
+                width, height = config["data"]["val"]["input_size"]
+                input_size = (height, width)
+                if config["data"]["val"].get("keep_ratio", False):
+                    continue
+                strides = tuple(int(value) for value in head["strides"])
+                reg_max = int(head["reg_max"])
+                mean, std = config["data"]["val"]["pipeline"]["normalize"]
+                class_names = tuple(config["class_names"])
+                if len(mean) != 3 or len(std) != 3 or any(float(value) <= 0 for value in std):
+                    continue
                 outputs = report.get("outputs")
                 if not isinstance(outputs, list) or len(outputs) != 1:
                     continue
                 channels = outputs[0].get("shape", [None, None, None])[-1]
-                num_classes = report.get("num_classes", channels - 32 if isinstance(channels, int) else None)
+                num_classes = report.get("num_classes", len(class_names))
                 classes = {1: ("palm",), 2: ("left_palm", "right_palm")}.get(num_classes)
                 if not report.get("valid") or classes is None:
                     continue
-                if report.get("inputs") != [{"name": "data", "shape": [1, 3, 320, 320]}]:
+                if class_names != classes:
                     continue
-                if report.get("outputs") != [{"name": "output", "shape": [1, 2125, 32 + len(classes)]}]:
+                if report.get("inputs") != [{"name": "data", "shape": [1, 3, height, width]}]:
+                    continue
+                priors = len(center_priors(height, width, strides=strides, center_offset=0.0 if config["model"]["arch"]["name"] == "NanoDetPlus" else 0.5))
+                if report.get("outputs") != [{"name": "output", "shape": [1, priors, 4 * (reg_max + 1) + len(classes)]}]:
                     continue
                 candidates = list(report_path.parent.glob("*.onnx"))
                 if len(candidates) != 1 or sha256_file(candidates[0]) != report.get("sha256"):
@@ -60,10 +83,11 @@ class OnnxReviewModels:
                     source = "单类手 · 便携HaGRIDv2"
                 else:
                     source = f"{'左右手' if len(classes) == 2 else '单类手'} · {run_id}"
-                label = f"NanoDet-Plus-m · {source}{f' · {date}' if date else ''}"
-                model = ReviewModel(run_id, path, report["sha256"], classes, label)
+                architecture = "NanoDet-Plus" if config["model"]["arch"]["name"] == "NanoDetPlus" else "NanoDet"
+                label = f"{architecture} {width} · {source}{f' · {date}' if date else ''}"
+                model = ReviewModel(run_id, path, report["sha256"], classes, label, input_size, strides, reg_max, 0.0 if architecture == "NanoDet-Plus" else 0.5, tuple(mean), tuple(std))
                 self.models[model.id] = model
-            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, yaml.YAMLError):
                 continue
 
     def catalog(self) -> list[dict[str, object]]:
@@ -97,7 +121,6 @@ class OnnxReviewModels:
         image = cv2.imread(str(image_path))
         if image is None:
             raise ValueError(f"cannot decode image: {image_path}")
-        tensor, _ = preprocess_bgr(image)
         image_stat = image_path.stat()
         results = []
         for model_id in model_ids:
@@ -108,6 +131,7 @@ class OnnxReviewModels:
                 if output is not None:
                     self.cache.move_to_end(key)
             if output is None:
+                tensor, _ = preprocess_bgr(image, input_size=model.input_size, mean=model.mean, std=model.std)
                 output = self._session(model).run(["output"], {"data": tensor})[0]
                 with self.lock:
                     self.cache[key] = output
@@ -116,7 +140,9 @@ class OnnxReviewModels:
                         self.cache.popitem(last=False)
             detections = decode_nanodet_plus(
                 output, class_names=model.class_names, score_threshold=score_threshold,
-                original_size=image.shape[:2],
+                original_size=image.shape[:2], input_size=model.input_size,
+                strides=model.strides, reg_max=model.reg_max,
+                center_offset=model.center_offset,
             )[0]
             results.append({"id": model.id, "label": model.label, "detections": detections_to_json(detections[:50])})
         return {"models": results}

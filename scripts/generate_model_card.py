@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml
 
 from palm_detector.dataset_contract import sha256_file
+from palm_detector.postprocess import center_priors
 
 
 def main() -> int:
@@ -29,17 +30,20 @@ def main() -> int:
     if len(class_names) != num_classes:
         raise ValueError("config class_names and head num_classes disagree")
     class_table = ", ".join(f"{index + 1}={name}" for index, name in enumerate(class_names))
-    output_channels = num_classes + 32
+    head = config["model"]["arch"]["head"]
+    width, height = config["data"]["val"]["input_size"]
+    strides = tuple(head["strides"])
+    reg_max = int(head["reg_max"])
+    output_channels = num_classes + 4 * (reg_max + 1)
+    prior_count = len(center_priors(height, width, strides=strides))
+    mean, std = config["data"]["val"]["pipeline"]["normalize"]
+    architecture = config["model"]["arch"]["name"]
     status = (
         "This is a pipeline smoke artifact and has no task-quality claim."
         if run.get("purpose") == "pipeline_smoke_not_quality_measurement"
         else "This is a training candidate until independent human-reviewed task quality and ATC/ACL performance evidence is recorded."
     )
-    text = f"""# NanoDet-Plus-m anatomical hand detector\n\n## Identity\n\n- Run ID: `{run['run_id']}`\n- Classes: `1=left_palm`, `2=right_palm` (person anatomical direction)\n- Checkpoint SHA-256: `{sha256_file(args.run_dir / 'model_best/model_best.ckpt')}`\n- ONNX SHA-256: `{sha256_file(args.onnx)}`\n- NanoDet upstream commit: `{run['upstream_nanodet']['commit']}`\n\n## Input\n\n- Tensor: `data`, `float32`, shape `1x3x320x320`\n- OpenCV BGR input, bilinear resize directly to `320x320`\n- Normalize BGR 0-255 values with mean `[103.53, 116.28, 123.675]` and standard deviation `[57.375, 57.12, 58.395]`\n\n## Output and host postprocessing\n\n- Tensor: `output`, `float32`, shape `1x2125x34`\n- Layout per prior: two sigmoid class scores followed by four 8-bin DFL distributions (`reg_max=7`)\n- Feature strides: `8, 16, 32, 64`; decode and class-aware NMS remain on the host.\n- Reference implementation: `src/palm_detector/postprocess.py`; fixed defaults are score `0.35`, NMS IoU `0.60`.\n\n## Provenance\n\n- Base config SHA-256: `{run['base_config']['sha256']}`\n- Run config SHA-256: `{run['run_config']['sha256']}`\n- Data audit SHA-256: `{run['data_audit']['sha256']}`\n- Pretrained checkpoint URL: `{run['pretrained']['upstream_url']}`\n- Pretrained checkpoint SHA-256: `{run['pretrained']['verified_sha256']}`\n- ONNX validation report: `{args.onnx_report}`\n\n{status}\n"""
-    text = text.replace("# NanoDet-Plus-m anatomical hand detector", "# NanoDet-Plus-m hand detector")
-    text = text.replace("- Classes: `1=left_palm`, `2=right_palm` (person anatomical direction)", f"- Classes: `{class_table}`")
-    text = text.replace("shape `1x2125x34`", f"shape `1x2125x{output_channels}`")
-    text = text.replace("two sigmoid class scores", f"{num_classes} sigmoid class score(s)")
+    text = f"""# NanoDet palm detector\n\n## Identity\n\n- Run ID: `{run['run_id']}`\n- Architecture: `{architecture}`\n- Classes: `{class_table}`\n- Checkpoint SHA-256: `{sha256_file(args.run_dir / 'model_best/model_best.ckpt')}`\n- ONNX SHA-256: `{sha256_file(args.onnx)}`\n- NanoDet upstream commit: `{run['upstream_nanodet']['commit']}`\n\n## Input\n\n- Tensor: `data`, `float32`, shape `1x3x{height}x{width}`\n- OpenCV BGR input, direct resize to `{width}x{height}`\n- Normalize BGR 0-255 values with mean `{mean}` and standard deviation `{std}`\n\n## Output and host postprocessing\n\n- Tensor: `output`, `float32`, shape `1x{prior_count}x{output_channels}`\n- Layout per prior: {num_classes} sigmoid class score(s) followed by four {reg_max + 1}-bin DFL distributions\n- Feature strides: `{list(strides)}`; prior offset: `{0.0 if architecture == 'NanoDetPlus' else 0.5}`\n- Decode and class-aware NMS remain on the host; reference implementation: `src/palm_detector/postprocess.py`.\n\n## Provenance\n\n- Base config SHA-256: `{run['base_config']['sha256']}`\n- Run config SHA-256: `{run['run_config']['sha256']}`\n- Data audit SHA-256: `{run['data_audit']['sha256']}`\n- Pretrained checkpoint URL: `{run['pretrained']['upstream_url']}`\n- Pretrained checkpoint SHA-256: `{run['pretrained']['verified_sha256']}`\n- ONNX validation report: `{args.onnx_report}`\n\n{status}\n"""
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")
     print(args.output)
