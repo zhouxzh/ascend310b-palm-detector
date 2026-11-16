@@ -17,8 +17,8 @@ while true; do
     ((hot+=1))
     printf 'WARNING: PicoDet GPU temperature %sC >= %sC (%s/3).\n' "$temp" "$MAX_TEMP" "$hot" >&2
     if (( hot >= 3 )); then
-      pgrep -f '[p]ython scripts/train_picodet.py' | xargs -r kill -TERM
-      pgrep -f '[p]ython scripts/run_picodet_sweep.py' | xargs -r kill -TERM
+      pgrep -f '[t]rain_picodet.py' | xargs -r kill -TERM
+      pgrep -f '[r]un_picodet_sweep.py' | xargs -r kill -TERM
       break
     fi
   else
