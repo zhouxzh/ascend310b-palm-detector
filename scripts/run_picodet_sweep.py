@@ -12,8 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "configs/picodet-sweep-v001.yml"
+INVENTORY = ROOT / "artifacts/picodet-v001/variant-inventory.json"
 STATE = ROOT / "artifacts/picodet-v001/sweep-state.json"
+RUNS_ROOT = ROOT / "artifacts/picodet-v001/runs"
+RUN_PREFIX = "picodet-v001"
 UPSTREAM = ROOT / "third_party/PaddleDetection"
 
 
@@ -41,9 +43,12 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--upstream", type=Path, default=UPSTREAM)
     parser.add_argument("--state", type=Path, default=STATE)
+    parser.add_argument("--inventory", type=Path, default=INVENTORY)
+    parser.add_argument("--runs-root", type=Path, default=RUNS_ROOT)
+    parser.add_argument("--run-prefix", default=RUN_PREFIX)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    matrix = json.loads((ROOT / "artifacts/picodet-v001/variant-inventory.json").read_text(encoding="utf-8"))
+    matrix = json.loads(args.inventory.read_text(encoding="utf-8"))
     variants = {item["id"]: Path(item["path"]) for item in matrix["variants"]}
     if args.only is not None and set(args.only) - set(variants):
         raise ValueError(f"unknown variants: {sorted(set(args.only) - set(variants))}")
@@ -52,8 +57,8 @@ def main() -> int:
         if args.only is not None and variant not in args.only:
             continue
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        run_id = f"picodet-v001-{variant}-seed-{args.seed}"
-        run_dir = ROOT / "artifacts/picodet-v001/runs" / run_id
+        run_id = f"{args.run_prefix}-{variant}-seed-{args.seed}"
+        run_dir = args.runs_root / run_id
         if completed(run_dir):
             state["variants"][variant] = {"status": "trained", "run_id": run_id, "run_dir": str(run_dir), "ended_at_utc": now()}
             write_state(args.state, state)

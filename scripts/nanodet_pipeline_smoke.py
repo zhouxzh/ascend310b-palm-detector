@@ -23,6 +23,7 @@ from nanodet.model.arch import build_model
 from nanodet.util import Logger, cfg, load_config, load_model_weight
 
 from palm_detector.dataset_contract import sha256_file
+from palm_detector.nanodet_extensions import install_nanodet_extensions
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,6 +76,7 @@ def main() -> int:
         raise ValueError("pipeline smoke requires a passing data-contract audit")
     pretrained = _verified_pretrained(args.pretrained_manifest, args.pretrained_checkpoint)
 
+    install_nanodet_extensions()
     load_config(cfg, str(args.base_config))
     cfg.defrost()
     cfg.save_dir = str(args.output_dir)

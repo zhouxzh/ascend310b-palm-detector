@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 from .dataset_contract import sha256_file
-from .postprocess import center_priors, decode_nanodet_plus, detections_to_json, preprocess_bgr
+from .postprocess import center_priors, decode_nanodet_plus, detections_to_json, preprocess_bgr, preprocess_bgr_letterbox
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class ReviewModel:
     center_offset: float
     mean: tuple[float, float, float]
     std: tuple[float, float, float]
+    letterbox: bool
 
     def public(self) -> dict[str, object]:
         return {"id": self.id, "label": self.label, "run_id": self.id, "class_names": list(self.class_names), "sha256": self.sha256}
@@ -47,7 +48,8 @@ class OnnxReviewModels:
                 head = config["model"]["arch"]["head"]
                 width, height = config["data"]["val"]["input_size"]
                 input_size = (height, width)
-                if config["data"]["val"].get("keep_ratio", False):
+                letterbox = bool(config["data"]["val"].get("pipeline", {}).get("palm_letterbox", False))
+                if config["data"]["val"].get("keep_ratio", False) and not letterbox:
                     continue
                 strides = tuple(int(value) for value in head["strides"])
                 reg_max = int(head["reg_max"])
@@ -85,7 +87,7 @@ class OnnxReviewModels:
                     source = f"{'左右手' if len(classes) == 2 else '单类手'} · {run_id}"
                 architecture = "NanoDet-Plus" if config["model"]["arch"]["name"] == "NanoDetPlus" else "NanoDet"
                 label = f"{architecture} {width} · {source}{f' · {date}' if date else ''}"
-                model = ReviewModel(run_id, path, report["sha256"], classes, label, input_size, strides, reg_max, 0.0 if architecture == "NanoDet-Plus" else 0.5, tuple(mean), tuple(std))
+                model = ReviewModel(run_id, path, report["sha256"], classes, label, input_size, strides, reg_max, 0.0 if architecture == "NanoDet-Plus" else 0.5, tuple(mean), tuple(std), letterbox)
                 self.models[model.id] = model
             except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, yaml.YAMLError):
                 continue
@@ -125,13 +127,17 @@ class OnnxReviewModels:
         results = []
         for model_id in model_ids:
             model = self.models[model_id]
+            if model.letterbox:
+                tensor, letterbox = preprocess_bgr_letterbox(image, input_size=model.input_size, mean=model.mean, std=model.std)
+            else:
+                tensor, _ = preprocess_bgr(image, input_size=model.input_size, mean=model.mean, std=model.std)
+                letterbox = None
             key = (model_id, str(image_path.resolve()), image_stat.st_size, image_stat.st_mtime_ns)
             with self.lock:
                 output = self.cache.get(key)
                 if output is not None:
                     self.cache.move_to_end(key)
             if output is None:
-                tensor, _ = preprocess_bgr(image, input_size=model.input_size, mean=model.mean, std=model.std)
                 output = self._session(model).run(["output"], {"data": tensor})[0]
                 with self.lock:
                     self.cache[key] = output
@@ -140,7 +146,7 @@ class OnnxReviewModels:
                         self.cache.popitem(last=False)
             detections = decode_nanodet_plus(
                 output, class_names=model.class_names, score_threshold=score_threshold,
-                original_size=image.shape[:2], input_size=model.input_size,
+                original_size=None if letterbox is not None else image.shape[:2], letterbox=letterbox, input_size=model.input_size,
                 strides=model.strides, reg_max=model.reg_max,
                 center_offset=model.center_offset,
             )[0]

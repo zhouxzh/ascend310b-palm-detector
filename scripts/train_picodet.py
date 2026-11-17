@@ -20,6 +20,7 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 
 class EarlyStop(RuntimeError):
@@ -78,7 +79,11 @@ def main() -> int:
     if sha256(Path(weight_record["path"])) != weight_record["sha256"] or Path(weight_record["path"]).stat().st_size != weight_record["bytes"]:
         raise ValueError("verified pretraining weight checksum or byte count changed")
 
+    sys.path.insert(0, str(ROOT / "src"))
     sys.path.insert(0, str(args.upstream))
+    from palm_detector.paddledetection_extensions import install_paddledetection_extensions
+
+    install_paddledetection_extensions()
     import paddle
     from ppdet.core.workspace import load_config
     from ppdet.engine import Trainer
@@ -110,8 +115,15 @@ def main() -> int:
     cfg.seed = args.seed
     if cfg.num_classes != 2:
         raise ValueError("generated PicoDet config did not set two classes")
-    if any(item.get("RandomFlip", {}).get("prob") not in (None, 0.0) for item in cfg["TrainReader"]["sample_transforms"]):
+    transforms = cfg["TrainReader"]["sample_transforms"]
+    if any(item.get("RandomFlip", {}).get("prob") not in (None, 0.0) for item in transforms):
         raise ValueError("horizontal flip must remain disabled for anatomical classes")
+    letterbox_mode = any("PalmLetterBox" in item for item in transforms)
+    if letterbox_mode:
+        if not any(item.get("PalmHandednessFlip", {}).get("prob", 0.0) > 0.0 for item in transforms):
+            raise ValueError("MediaPipe-style PicoDet training requires PalmHandednessFlip")
+        if not any("PalmLetterBox" in item for item in transforms):
+            raise ValueError("MediaPipe-style PicoDet training requires PalmLetterBox")
 
     progress = {"schema_version": 1, "variant": manifest["id"], "best_dev_map": float("-inf"), "bad_checks": 0, "history": []}
     if progress_path.is_file():

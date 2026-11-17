@@ -95,6 +95,8 @@ model predictions a thin box in the same class color.
 The exact NanoDet/PicoDet optimizer, warmup, learning-rate schedule, batch
 scaling, epoch limits, selected ONNX candidates, and TensorBoard retention
 policy are recorded in [docs/10-training-recipes-and-retention.md](docs/10-training-recipes-and-retention.md).
+The MediaPipe-style LetterBox retraining protocol and semantic left/right flip
+augmentation are recorded in [docs/11-mediapipe-letterbox-v002.md](docs/11-mediapipe-letterbox-v002.md).
 
 Before training, fill a real immutable pretrained-weight manifest from
 `data/manifests/pretrained-weights.template.json`. Its file hash must match the

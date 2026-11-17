@@ -74,10 +74,10 @@ def main() -> int:
     height, width = config["TestReader"]["inputs_def"]["image_shape"][2:]
     export_root = args.run_dir / "onnx-export"
     env = os.environ.copy()
-    env["PYTHONPATH"] = f"{args.upstream}:{env.get('PYTHONPATH', '')}"
+    env["PYTHONPATH"] = f"{ROOT / 'src'}:{args.upstream}:{env.get('PYTHONPATH', '')}"
     env["FLAGS_json_format_model"] = "1"
     command = [
-        sys.executable, str(args.upstream / "tools/export_model.py"), "-c", str(config_path.resolve()),
+        sys.executable, str(ROOT / "scripts/export_picodet_model.py"), "-c", str(config_path.resolve()),
         "--output_dir", str(export_root), "-o", f"weights={checkpoint}",
         "export.post_process=False", "export.nms=False", "export.benchmark=True",
         "export_with_pir=True",

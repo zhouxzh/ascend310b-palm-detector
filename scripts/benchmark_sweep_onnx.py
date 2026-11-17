@@ -15,7 +15,7 @@ import onnxruntime as ort
 import yaml
 
 from palm_detector.dataset_contract import sha256_file
-from palm_detector.postprocess import preprocess_bgr
+from palm_detector.postprocess import preprocess_bgr, preprocess_bgr_letterbox
 
 
 def benchmark(session: ort.InferenceSession, tensor: np.ndarray, *, warmup: int, repeats: int) -> dict[str, float]:
@@ -53,7 +53,10 @@ def main() -> int:
     image = cv2.imread(str(args.image))
     if image is None:
         raise ValueError(f"cannot decode {args.image}")
-    tensor, _ = preprocess_bgr(image, input_size=(height, width), mean=mean, std=std)
+    if config["data"]["val"].get("pipeline", {}).get("palm_letterbox", False):
+        tensor, _ = preprocess_bgr_letterbox(image, input_size=(height, width), mean=mean, std=std)
+    else:
+        tensor, _ = preprocess_bgr(image, input_size=(height, width), mean=mean, std=std)
     options = ort.SessionOptions()
     options.intra_op_num_threads = args.cpu_threads
     options.inter_op_num_threads = 1

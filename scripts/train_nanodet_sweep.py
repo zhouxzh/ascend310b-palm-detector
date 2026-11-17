@@ -16,7 +16,12 @@ from pytorch_lightning.callbacks import Callback, TQDMProgressBar
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "third_party/nanodet"))
+
+from palm_detector.nanodet_extensions import install_nanodet_extensions
+
+install_nanodet_extensions()
 
 from nanodet.data.collate import naive_collate
 from nanodet.data.dataset import build_dataset

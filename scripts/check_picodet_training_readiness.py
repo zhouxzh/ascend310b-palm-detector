@@ -22,7 +22,18 @@ def sha256(path: Path) -> str:
 
 
 def main() -> int:
-    matrix = yaml.safe_load((ROOT / "configs/picodet-sweep-v001.yml").read_text(encoding="utf-8"))
+    import sys
+
+    sys.path.insert(0, str(ROOT / "src"))
+    from palm_detector.paddledetection_extensions import install_paddledetection_extensions
+
+    install_paddledetection_extensions()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--matrix", type=Path, default=ROOT / "configs/picodet-sweep-v001.yml")
+    args = parser.parse_args()
+    matrix = yaml.safe_load(args.matrix.read_text(encoding="utf-8"))
     if not paddle.is_compiled_with_cuda() or paddle.device.cuda.device_count() != 1:
         raise RuntimeError("exactly one usable Paddle CUDA device is required")
     paddle.set_device("gpu:0")

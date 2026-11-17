@@ -16,7 +16,7 @@ cd "$ROOT"
 PYTHONPATH=src conda run --no-capture-output -n palm-nanodet \
   python scripts/create_evaluation_config.py --run-config "$RUN_DIR/config.yml" --task "$TASK" --output "$EVALUATION_CONFIG"
 conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
-  env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python third_party/nanodet/tools/test.py --task "$TASK" --config "$EVALUATION_CONFIG" --model "$CHECKPOINT" |& tee "$EVALUATION_DIR/evaluate-$TASK.log"
+  env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/test_nanodet_model.py --task "$TASK" --config "$EVALUATION_CONFIG" --model "$CHECKPOINT" |& tee "$EVALUATION_DIR/evaluate-$TASK.log"
 
 if [[ "$TASK" == "test" ]]; then
   TEST_ANNOTATIONS="$(conda run --no-capture-output -n palm-nanodet python -c "import yaml; print(yaml.safe_load(open('$EVALUATION_CONFIG', encoding='utf-8'))['data']['val']['ann_path'])")"

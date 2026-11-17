@@ -7,6 +7,7 @@ from typing import Iterable
 
 import numpy as np
 
+from .letterbox import LetterboxTransform, letterbox_bgr
 from .labels import CLASS_NAMES
 
 INPUT_WIDTH = 320
@@ -54,6 +55,23 @@ def preprocess_bgr(
     resized = cv2.resize(image, (input_width, input_height), interpolation=cv2.INTER_LINEAR)
     normalized = (resized.astype(np.float32) - mean) / std
     return normalized.transpose(2, 0, 1)[None, ...], (input_width / width, input_height / height)
+
+
+def preprocess_bgr_letterbox(
+    image: np.ndarray,
+    *,
+    input_size: tuple[int, int] = (INPUT_HEIGHT, INPUT_WIDTH),
+    mean: tuple[float, float, float] | np.ndarray = BGR_MEAN,
+    std: tuple[float, float, float] | np.ndarray = BGR_STD,
+) -> tuple[np.ndarray, LetterboxTransform]:
+    """Return a MediaPipe-style zero-padded tensor and its inverse geometry."""
+    canvas, transform = letterbox_bgr(image, target_size=input_size, pad_value=0)
+    mean = np.asarray(mean, dtype=np.float32)
+    std = np.asarray(std, dtype=np.float32)
+    if mean.shape != (3,) or std.shape != (3,) or not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)) or np.any(std <= 0):
+        raise ValueError("mean and std must be finite BGR triplets with positive std")
+    normalized = (canvas.astype(np.float32) - mean) / std
+    return normalized.transpose(2, 0, 1)[None, ...], transform
 
 
 def _sigmoid(values: np.ndarray) -> np.ndarray:
@@ -124,6 +142,7 @@ def decode_nanodet_plus(
     nms_iou_threshold: float = 0.6,
     scores_are_logits: bool = False,
     original_size: tuple[int, int] | None = None,
+    letterbox: LetterboxTransform | None = None,
 ) -> list[list[Detection]]:
     """Decode Plus or legacy raw output without ONNX NMS ops."""
     output = np.asarray(output, dtype=np.float32)
@@ -145,7 +164,11 @@ def decode_nanodet_plus(
     boxes = np.concatenate((priors[None, :, :2] - distances[:, :, :2], priors[None, :, :2] + distances[:, :, 2:]), axis=-1)
     boxes[:, :, [0, 2]] = np.clip(boxes[:, :, [0, 2]], 0, input_width)
     boxes[:, :, [1, 3]] = np.clip(boxes[:, :, [1, 3]], 0, input_height)
-    if original_size is not None:
+    if letterbox is not None:
+        if (input_height, input_width) != (letterbox.target_height, letterbox.target_width):
+            raise ValueError("letterbox target dimensions do not match model input")
+        boxes = letterbox.unmap_boxes(boxes)
+    elif original_size is not None:
         original_height, original_width = original_size
         boxes[:, :, [0, 2]] *= original_width / input_width
         boxes[:, :, [1, 3]] *= original_height / input_height

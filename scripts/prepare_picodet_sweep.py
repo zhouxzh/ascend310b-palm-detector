@@ -32,9 +32,46 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
     size = int(item["input_size"])
     pretrained = matrix["pretrained"][item["pretrained"]]
     microbatch = int(item["batch_size"])
+    preprocessing = matrix.get("preprocessing", {})
+    mediapipe_letterbox = preprocessing.get("mode") == "mediapipe_letterbox"
+    if mediapipe_letterbox:
+        train_transforms = [{"Decode": {}}]
+        if preprocessing.get("random_crop", True):
+            train_transforms.append({"RandomCrop": {}})
+        train_transforms.append({"PalmHandednessFlip": {"prob": float(preprocessing.get("handedness_flip_probability", 0.5))}})
+        if preprocessing.get("random_distort", True):
+            train_transforms.append({"RandomDistort": {}})
+        train_transforms.append({"PalmLetterBox": {"target_size": [size, size], "pad_value": int(preprocessing.get("pad_value", 0))}})
+        eval_transforms = [
+            {"Decode": {}},
+            {"PalmLetterBox": {"target_size": [size, size], "pad_value": int(preprocessing.get("pad_value", 0))}},
+        ]
+        train_batch_transforms = [
+            {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
+            {"Permute": {}},
+            {"PadGT": {}},
+        ]
+    else:
+        train_transforms = [
+            {"Decode": {}},
+            {"RandomCrop": {}},
+            {"RandomFlip": {"prob": 0.0}},
+            {"RandomDistort": {}},
+        ]
+        eval_transforms = [
+            {"Decode": {}},
+            {"Resize": {"interp": 2, "target_size": [size, size], "keep_ratio": False}},
+        ]
+        train_batch_transforms = [
+            {"BatchRandomResize": {"target_size": [size, size], "random_size": False, "random_interp": False, "keep_ratio": False}},
+            {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
+            {"Permute": {}},
+            {"PadGT": {}},
+        ]
     training_config = {
         "_BASE_": [str(source.resolve())],
         "num_classes": len(matrix["classes"]),
+        **({"architecture": matrix["architecture"]} if matrix.get("architecture") else {}),
         "use_gpu": True,
         "use_vdl": True,
         "epoch": int(item["epochs"]),
@@ -55,26 +92,15 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
             "allow_empty": True,
         },
         "TrainReader": {
-            "sample_transforms": [
-                {"Decode": {}},
-                {"RandomCrop": {}},
-                {"RandomFlip": {"prob": 0.0}},
-                {"RandomDistort": {}},
-            ],
-            "batch_transforms": [
-                {"BatchRandomResize": {"target_size": [size, size], "random_size": False, "random_interp": False, "keep_ratio": False}},
-                {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
-                {"Permute": {}},
-                {"PadGT": {}},
-            ],
+            "sample_transforms": train_transforms,
+            "batch_transforms": train_batch_transforms,
             "batch_size": microbatch,
             "shuffle": True,
             "drop_last": True,
         },
         "EvalReader": {
             "sample_transforms": [
-                {"Decode": {}},
-                {"Resize": {"interp": 2, "target_size": [size, size], "keep_ratio": False}},
+                *eval_transforms,
                 {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
                 {"Permute": {}},
             ],
@@ -85,8 +111,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
         "TestReader": {
             "inputs_def": {"image_shape": [1, 3, size, size]},
             "sample_transforms": [
-                {"Decode": {}},
-                {"Resize": {"interp": 2, "target_size": [size, size], "keep_ratio": False}},
+                *eval_transforms,
                 {"NormalizeImage": {"is_scale": True, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]}},
                 {"Permute": {}},
             ],
@@ -116,6 +141,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
         "seed": matrix["seed"],
         "validation_interval": matrix["validation_interval"],
         "early_stop": matrix["early_stop"],
+        "preprocessing": preprocessing,
         "training_config": training_config,
     }
 
@@ -128,8 +154,9 @@ def main() -> int:
     args = parser.parse_args()
     matrix_bytes = args.matrix.read_bytes()
     matrix = yaml.safe_load(matrix_bytes)
-    if len(matrix["variants"]) != 9:
-        raise ValueError("PicoDet sweep must contain exactly 9 standard variants")
+    expected_variants = int(matrix.get("expected_variants", 9))
+    if len(matrix["variants"]) != expected_variants:
+        raise ValueError(f"PicoDet matrix must contain exactly {expected_variants} variants")
     if not (ROOT / matrix["dataset"] / "annotations/instances_train.json").is_file():
         raise FileNotFoundError("training COCO annotations are missing")
     for split in ("dev", "gate", "test"):
