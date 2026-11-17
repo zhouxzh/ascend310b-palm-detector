@@ -11,6 +11,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PreprocessExtensionsTest(unittest.TestCase):
+    def test_v002_recipe_declares_semantic_flip_and_letterbox_for_both_splits(self) -> None:
+        import yaml
+
+        config = yaml.safe_load((ROOT / "configs/nanodet-plus-m-320-mediapipe-letterbox-v002.yml").read_text(encoding="utf-8"))
+        self.assertEqual(config["data"]["train"]["pipeline"]["flip"], 0.5)
+        self.assertTrue(config["data"]["train"]["pipeline"]["swap_handedness_on_flip"])
+        self.assertTrue(config["data"]["train"]["pipeline"]["palm_letterbox"])
+        self.assertTrue(config["data"]["val"]["pipeline"]["palm_letterbox"])
+
     def test_nanodet_letterbox_flip_swaps_anatomical_labels(self) -> None:
         sys.path.insert(0, str(ROOT / "third_party/nanodet"))
         from palm_detector.nanodet_extensions import install_nanodet_extensions

@@ -29,7 +29,8 @@ def main() -> int:
     blockers: list[str] = []
     if tuple(config["class_names"]) != CLASS_NAMES or config["model"]["arch"]["head"]["num_classes"] != 2:
         blockers.append("model category contract is not exactly two anatomical hand classes")
-    if config["data"]["train"]["pipeline"].get("flip") != 0.0:
+    pipeline = config["data"]["train"]["pipeline"]
+    if pipeline.get("flip") != 0.0 and not pipeline.get("swap_handedness_on_flip", False):
         blockers.append("horizontal flip is enabled without a verified label-exchange transform")
     annotation_root = ROOT / "data/portable-hagridv2-mediapipe-hand/coco-handed-v001/annotations"
     required = [annotation_root / f"instances_{split}.json" for split in ("train", "val", "test")]

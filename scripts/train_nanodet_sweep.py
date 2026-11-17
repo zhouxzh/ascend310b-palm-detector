@@ -97,8 +97,10 @@ def main() -> int:
     load_config(cfg, str(args.config))
     if cfg.model.arch.head.num_classes != len(cfg.class_names) or tuple(cfg.class_names) != ("left_palm", "right_palm"):
         raise ValueError("the two-class palm category contract is invalid")
-    if cfg.data.train.pipeline.flip != 0:
-        raise ValueError("horizontal flip is incompatible with anatomical classes")
+    if cfg.data.train.pipeline.flip != 0 and not cfg.data.train.pipeline.get("swap_handedness_on_flip", False):
+        raise ValueError("anatomical horizontal flip requires swap_handedness_on_flip=true")
+    if cfg.data.train.pipeline.get("palm_letterbox", False) and not cfg.data.val.pipeline.get("palm_letterbox", False):
+        raise ValueError("NanoDet LetterBox must be used for both train and validation")
     if cfg.device.gpu_ids != [0] or not torch.cuda.is_available():
         raise RuntimeError("the pinned sweep requires one usable CUDA GPU")
     accumulation = int(cfg.device.accumulate_grad_batches)
