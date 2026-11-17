@@ -36,7 +36,7 @@ if [[ ! -f "$NANODET_RUN_DIR/training-summary.json" ]]; then
     resume+=(--resume)
   fi
   conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
-    env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/train_nanodet_sweep.py "$NANODET_RUN_DIR/config.yml" --seed 42 "${resume[@]}"
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/train_nanodet_sweep.py "$NANODET_RUN_DIR/config.yml" --seed 42 "${resume[@]}" |& tee -a "$NANODET_RUN_DIR/train.log"
 fi
 
 conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
