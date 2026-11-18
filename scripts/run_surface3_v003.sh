@@ -33,6 +33,10 @@ fi
 if [[ ! -f "$NANODET_RUN_DIR/onnx-check.json" ]]; then
   ./scripts/export_onnx.sh "$NANODET_RUN_DIR"
 fi
+if [[ ! -f "$NANODET_RUN_DIR/evaluations/test/coco-metrics.json" ]]; then
+  NANODET_TEST_ANNOTATIONS="$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json" \
+    ./scripts/evaluate_nanodet.sh "$NANODET_RUN_DIR" test
+fi
 
 conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
   env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/run_picodet_sweep.py \
@@ -41,4 +45,13 @@ readonly PICODET_RUN_DIR="$PICODET_RUNS/$PICODET_RUN_ID"
 if [[ ! -f "$PICODET_RUN_DIR/picodet-onnx-check.json" ]]; then
   conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
     env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/export_picodet_onnx.py --run-dir "$PICODET_RUN_DIR" --upstream third_party/PaddleDetection --samples 3
+fi
+if [[ ! -f "$PICODET_RUN_DIR/test-eval/coco-metrics.json" ]]; then
+  conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/evaluate_picodet.py \
+    --run-dir "$PICODET_RUN_DIR" --annotations "$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json" \
+    --output-dir "$PICODET_RUN_DIR/test-eval" --upstream third_party/PaddleDetection
+  PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/evaluate_coco_metrics.py \
+    --ground-truth "$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json" \
+    --predictions "$PICODET_RUN_DIR/test-eval/bbox.json" --output "$PICODET_RUN_DIR/test-eval/coco-metrics.json"
 fi

@@ -22,6 +22,11 @@ Development/gate scores select the checkpoint using aggregate mAP. Side AP is
 too low-sample for tuning; it is reported separately on the natural,
 subject-disjoint test split after the model is frozen.
 
+Only a high-confidence `palm` prediction may proceed to palmprint recognition.
+`back`, `side`, no detection, low confidence, or a close class decision are
+all surfaced to the calling application as the non-model `unknown` rejection
+state.
+
 ## Models And Augmentation
 
 | Framework | Variant | Input | Optimizer recipe |

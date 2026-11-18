@@ -1,5 +1,6 @@
 # Palm-surface detector: user-approved palm/back/side labels, fixed LetterBox.
 save_dir: artifacts/runs/_requires_run_id
+test_annotations: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json
 model:
   weight_averager:
     name: ExpMovingAverager

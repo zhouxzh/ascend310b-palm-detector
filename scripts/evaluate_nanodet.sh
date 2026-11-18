@@ -13,8 +13,12 @@ readonly EVALUATION_DIR="$RUN_DIR/evaluations/$TASK"
 readonly EVALUATION_CONFIG="$EVALUATION_DIR/config.yml"
 [[ -f "$RUN_DIR/config.yml" && -f "$CHECKPOINT" ]] || { echo "Missing run config or best checkpoint" >&2; exit 2; }
 cd "$ROOT"
+test_annotations=()
+if [[ "$TASK" == "test" && -n "${NANODET_TEST_ANNOTATIONS:-}" ]]; then
+  test_annotations=(--test-annotations "$NANODET_TEST_ANNOTATIONS")
+fi
 PYTHONPATH=src conda run --no-capture-output -n palm-nanodet \
-  python scripts/create_evaluation_config.py --run-config "$RUN_DIR/config.yml" --task "$TASK" --output "$EVALUATION_CONFIG"
+  python scripts/create_evaluation_config.py --run-config "$RUN_DIR/config.yml" --task "$TASK" --output "$EVALUATION_CONFIG" "${test_annotations[@]}"
 conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
   env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/test_nanodet_model.py --task "$TASK" --config "$EVALUATION_CONFIG" --model "$CHECKPOINT" |& tee "$EVALUATION_DIR/evaluate-$TASK.log"
 
