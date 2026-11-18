@@ -40,6 +40,11 @@ isotropic scale (NanoDet), rotation/translation (NanoDet), and photometric
 distortion. Neither uses anisotropic stretch. Validation, ONNX preprocessing,
 and deployment use only deterministic LetterBox.
 
+The NanoDet controller also runs a deterministic 20-image ONNX Runtime check
+against PyTorch. The samples are selected from the held-out test split with
+rare classes first, and the persisted report records source-image hashes, raw
+output error, and decoded class/box agreement.
+
 ## Launch
 
 ```bash

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -55,16 +56,103 @@ def _compare_detections(reference: list[dict[str, object]], candidate: list[dict
     return True, min(ious, default=1.0)
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _select_coco_images(annotations: Path, images_root: Path, sample_count: int) -> tuple[list[Path], dict[str, object]]:
+    """Select a deterministic, class-balanced set of readable COCO images."""
+    if sample_count < 1:
+        raise ValueError("sample count must be positive")
+    payload = json.loads(annotations.read_text(encoding="utf-8"))
+    image_by_id = {int(item["id"]): item for item in payload["images"]}
+    categories = {int(item["id"]): str(item["name"]) for item in payload["categories"]}
+    by_category = {category_id: set() for category_id in categories}
+    for annotation in payload["annotations"]:
+        category_id = int(annotation["category_id"])
+        image_id = int(annotation["image_id"])
+        if category_id in by_category and image_id in image_by_id:
+            by_category[category_id].add(image_id)
+
+    selected_ids: list[int] = []
+    # Rare categories are considered first, so the runtime check exercises them
+    # even when the test split is highly imbalanced.
+    quota = max(1, (sample_count + len(categories) - 1) // len(categories))
+    for category_id in sorted(categories, key=lambda item: (len(by_category[item]), categories[item])):
+        for image_id in sorted(by_category[category_id]):
+            if image_id not in selected_ids:
+                selected_ids.append(image_id)
+            if len(selected_ids) >= sample_count or sum(
+                item in by_category[category_id] for item in selected_ids
+            ) >= quota:
+                break
+        if len(selected_ids) >= sample_count:
+            break
+    if len(selected_ids) < sample_count:
+        for image_id in sorted(image_by_id):
+            if image_id not in selected_ids:
+                selected_ids.append(image_id)
+            if len(selected_ids) >= sample_count:
+                break
+
+    paths: list[Path] = []
+    records: list[dict[str, object]] = []
+    for image_id in selected_ids:
+        filename = str(image_by_id[image_id]["file_name"])
+        path = images_root / filename
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        paths.append(path)
+        records.append({
+            "image_id": image_id,
+            "file_name": filename,
+            "path": str(path),
+            "sha256": _sha256(path),
+            "categories": [categories[item] for item in sorted(categories) if image_id in by_category[item]],
+        })
+    manifest = {
+        "schema_version": 1,
+        "annotations": str(annotations),
+        "annotations_sha256": _sha256(annotations),
+        "selection": "deterministic class-balanced, rare classes first",
+        "requested_count": sample_count,
+        "images": records,
+    }
+    return paths, manifest
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--onnx", type=Path, required=True)
-    parser.add_argument("--images", nargs="+", type=Path, required=True)
+    parser.add_argument("--images", nargs="+", type=Path)
+    parser.add_argument("--coco-annotations", type=Path, help="COCO annotations used for deterministic representative-image selection")
+    parser.add_argument("--images-root", type=Path, help="Image directory paired with --coco-annotations")
+    parser.add_argument("--sample-count", type=int, default=20)
+    parser.add_argument("--sample-manifest", type=Path, help="Optional persisted manifest for COCO-selected images")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-abs-error", type=float, default=1e-4)
     parser.add_argument("--minimum-decoded-iou", type=float, default=0.999)
     args = parser.parse_args()
+    if args.images:
+        if args.coco_annotations or args.images_root or args.sample_manifest:
+            parser.error("--images cannot be combined with COCO sampling options")
+        images = args.images
+        sample_manifest = None
+    else:
+        if not args.coco_annotations or not args.images_root:
+            parser.error("provide --images or both --coco-annotations and --images-root")
+        if not args.coco_annotations.is_file() or not args.images_root.is_dir():
+            parser.error("COCO annotations or image root is missing")
+        images, sample_manifest = _select_coco_images(args.coco_annotations, args.images_root, args.sample_count)
+        if args.sample_manifest:
+            args.sample_manifest.parent.mkdir(parents=True, exist_ok=True)
+            args.sample_manifest.write_text(json.dumps(sample_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / "third_party/nanodet"))
     from nanodet.model.arch import build_model
@@ -91,7 +179,7 @@ def main() -> int:
     report_images = []
     all_ok = True
     with torch.no_grad():
-        for image_path in args.images:
+        for image_path in images:
             image = cv2.imread(str(image_path))
             if image is None:
                 raise ValueError(f"cannot read image {image_path}")
@@ -111,7 +199,7 @@ def main() -> int:
             passed = max_error <= args.max_abs_error and decoded_match
             all_ok = all_ok and passed
             report_images.append({"image": str(image_path), "raw_max_abs_error": max_error, "raw_mean_abs_error": float(difference.mean()), "decoded_class_and_iou_match": decoded_match, "decoded_minimum_iou": minimum_iou, "pytorch_detections": decoded_torch, "onnx_detections": decoded_onnx, "passed": passed})
-    report = {"valid": all_ok, "raw_tensor_contract": "PyTorch class logits sigmoid-transformed to match NanoDet ONNX export; DFL bins unchanged", "preprocess": "mediapipe_letterbox" if letterbox_mode else "direct_resize", "input_size": [input_width, input_height], "strides": list(decode_options["strides"]), "reg_max": decode_options["reg_max"], "center_offset": decode_options["center_offset"], "max_abs_error_limit": args.max_abs_error, "decoded_iou_limit": args.minimum_decoded_iou, "images": report_images}
+    report = {"valid": all_ok, "raw_tensor_contract": "PyTorch class logits sigmoid-transformed to match NanoDet ONNX export; DFL bins unchanged", "preprocess": "mediapipe_letterbox" if letterbox_mode else "direct_resize", "input_size": [input_width, input_height], "strides": list(decode_options["strides"]), "reg_max": decode_options["reg_max"], "center_offset": decode_options["center_offset"], "max_abs_error_limit": args.max_abs_error, "decoded_iou_limit": args.minimum_decoded_iou, "sample_manifest": str(args.sample_manifest) if sample_manifest is not None and args.sample_manifest else None, "images": report_images}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {args.output}: {'PASS' if all_ok else 'FAIL'}")

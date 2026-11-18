@@ -4,6 +4,7 @@ set -euo pipefail
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly RUN_ID="nanodet-plus-m15-416-surface3-letterbox-v003__data-v001__seed-42__20261118-1500"
 readonly NANODET_RUN_DIR="$ROOT/artifacts/runs/$RUN_ID"
+readonly NANODET_ONNX="$NANODET_RUN_DIR/model-416x416.onnx"
 readonly NANO_AUDIT="$ROOT/reports/surface3-v001-data-audit.json"
 readonly PICODET_ROOT="$ROOT/artifacts/picodet-surface3-v003"
 readonly PICODET_INVENTORY="$PICODET_ROOT/variant-inventory.json"
@@ -32,6 +33,14 @@ if [[ ! -f "$NANODET_RUN_DIR/training-summary.json" ]]; then
 fi
 if [[ ! -f "$NANODET_RUN_DIR/onnx-check.json" ]]; then
   ./scripts/export_onnx.sh "$NANODET_RUN_DIR"
+fi
+if [[ ! -f "$NANODET_RUN_DIR/onnx-comparison.json" ]]; then
+  conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/compare_onnx.py \
+      --config "$NANODET_RUN_DIR/config.yml" --checkpoint "$NANODET_RUN_DIR/model_best/model_best.ckpt" \
+      --onnx "$NANODET_ONNX" --coco-annotations "$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json" \
+      --images-root "$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/images" --sample-count 20 \
+      --sample-manifest "$NANODET_RUN_DIR/onnx-comparison-samples.json" --output "$NANODET_RUN_DIR/onnx-comparison.json"
 fi
 if [[ ! -f "$NANODET_RUN_DIR/evaluations/test/coco-metrics.json" ]]; then
   NANODET_TEST_ANNOTATIONS="$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json" \
