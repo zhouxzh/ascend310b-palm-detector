@@ -41,7 +41,8 @@ def main() -> int:
     if float((x + x).cpu().numpy().sum()) != 128.0:
         raise RuntimeError("Paddle GPU arithmetic gate failed")
     root = ROOT / matrix["dataset"]
-    if not (root / "annotations/instances_train.json").is_file():
+    train_annotations = root / matrix.get("sampling", {}).get("train_annotations", "annotations/instances_train.json")
+    if not train_annotations.is_file():
         raise FileNotFoundError("training annotations are missing")
     for split in ("dev", "gate", "test"):
         if not (ROOT / matrix["validation"][split]).is_file():

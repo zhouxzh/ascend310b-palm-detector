@@ -6,6 +6,7 @@ CLASS_NAMES = ("left_palm", "right_palm")
 COCO_CATEGORY_IDS = {1: "left_palm", 2: "right_palm"}
 CLASS_INDEX_BY_COCO_ID = {category_id: index for index, category_id in enumerate(COCO_CATEGORY_IDS)}
 SINGLE_PALM_CATEGORY_IDS = {1: "palm"}
+SURFACE_CATEGORY_IDS = {1: "palm", 2: "back", 3: "side"}
 
 
 def validate_categories(

@@ -71,6 +71,10 @@ def main() -> int:
     if not checkpoint.with_suffix(".pdparams").is_file():
         raise FileNotFoundError("best PicoDet checkpoint is missing")
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    run_metadata = json.loads((args.run_dir / "run.json").read_text(encoding="utf-8"))
+    classes = tuple(run_metadata.get("classes", ("left_palm", "right_palm") if int(config["num_classes"]) == 2 else ()))
+    if len(classes) != int(config["num_classes"]):
+        raise ValueError("PicoDet run metadata classes do not match config num_classes")
     height, width = config["TestReader"]["inputs_def"]["image_shape"][2:]
     export_root = args.run_dir / "onnx-export"
     env = os.environ.copy()
@@ -135,7 +139,7 @@ def main() -> int:
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     card = args.run_dir / "picodet-model-card.md"
     card.write_text(
-        f"# PicoDet Palm Detector\n\n- Run: `{args.run_dir.name}`\n- Classes: `left_palm`, `right_palm`\n- Input: `image`, float32, `1x3x{height}x{width}`\n- ONNX: `{onnx_path.name}`\n- ONNX SHA-256: `{report['sha256']}`\n- Raw Paddle/ONNX report: `{report_path.name}`\n",
+        f"# PicoDet Palm Detector\n\n- Run: `{args.run_dir.name}`\n- Classes: {', '.join(f'`{name}`' for name in classes)}\n- Input: `image`, float32, `1x3x{height}x{width}`\n- ONNX: `{onnx_path.name}`\n- ONNX SHA-256: `{report['sha256']}`\n- Raw Paddle/ONNX report: `{report_path.name}`\n",
         encoding="utf-8",
     )
     print(report_path)

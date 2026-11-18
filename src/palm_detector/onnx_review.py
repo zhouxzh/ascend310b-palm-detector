@@ -62,7 +62,7 @@ class OnnxReviewModels:
                     continue
                 channels = outputs[0].get("shape", [None, None, None])[-1]
                 num_classes = report.get("num_classes", len(class_names))
-                classes = {1: ("palm",), 2: ("left_palm", "right_palm")}.get(num_classes)
+                classes = {1: ("palm",), 2: ("left_palm", "right_palm"), 3: ("palm", "back", "side")}.get(num_classes)
                 if not report.get("valid") or classes is None:
                     continue
                 if class_names != classes:

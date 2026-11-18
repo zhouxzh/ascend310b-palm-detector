@@ -32,13 +32,21 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
     size = int(item["input_size"])
     pretrained = matrix["pretrained"][item["pretrained"]]
     microbatch = int(item["batch_size"])
+    sampling = matrix.get("sampling", {})
+    train_annotations = str(sampling.get("train_annotations", "annotations/instances_train.json"))
     preprocessing = matrix.get("preprocessing", {})
     mediapipe_letterbox = preprocessing.get("mode") == "mediapipe_letterbox"
+    classes = tuple(matrix["classes"])
+    if classes not in {("left_palm", "right_palm"), ("palm", "back", "side")}:
+        raise ValueError("PicoDet classes must be anatomical hands or palm/back/side")
     if mediapipe_letterbox:
         train_transforms = [{"Decode": {}}]
         if preprocessing.get("random_crop", True):
             train_transforms.append({"RandomCrop": {}})
-        train_transforms.append({"PalmHandednessFlip": {"prob": float(preprocessing.get("handedness_flip_probability", 0.5))}})
+        if classes == ("left_palm", "right_palm"):
+            train_transforms.append({"PalmHandednessFlip": {"prob": float(preprocessing.get("handedness_flip_probability", 0.5))}})
+        else:
+            train_transforms.append({"RandomFlip": {"prob": float(preprocessing.get("flip_probability", 0.5))}})
         if preprocessing.get("random_distort", True):
             train_transforms.append({"RandomDistort": {}})
         train_transforms.append({"PalmLetterBox": {"target_size": [size, size], "pad_value": int(preprocessing.get("pad_value", 0))}})
@@ -81,7 +89,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
             "name": "COCODataSet",
             "dataset_dir": str((ROOT / matrix["dataset"]).resolve()),
             "image_dir": "images",
-            "anno_path": "annotations/instances_train.json",
+            "anno_path": train_annotations,
             "data_fields": ["image", "gt_bbox", "gt_class", "is_crowd"],
         },
         "EvalDataset": {
@@ -142,6 +150,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
         "validation_interval": matrix["validation_interval"],
         "early_stop": matrix["early_stop"],
         "preprocessing": preprocessing,
+        "sampling": sampling,
         "training_config": training_config,
     }
 
@@ -157,7 +166,8 @@ def main() -> int:
     expected_variants = int(matrix.get("expected_variants", 9))
     if len(matrix["variants"]) != expected_variants:
         raise ValueError(f"PicoDet matrix must contain exactly {expected_variants} variants")
-    if not (ROOT / matrix["dataset"] / "annotations/instances_train.json").is_file():
+    train_annotations = ROOT / matrix["dataset"] / matrix.get("sampling", {}).get("train_annotations", "annotations/instances_train.json")
+    if not train_annotations.is_file():
         raise FileNotFoundError("training COCO annotations are missing")
     for split in ("dev", "gate", "test"):
         if not (ROOT / matrix["validation"][split]).is_file():

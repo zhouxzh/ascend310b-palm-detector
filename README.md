@@ -97,6 +97,8 @@ scaling, epoch limits, selected ONNX candidates, and TensorBoard retention
 policy are recorded in [docs/10-training-recipes-and-retention.md](docs/10-training-recipes-and-retention.md).
 The MediaPipe-style LetterBox retraining protocol and semantic left/right flip
 augmentation are recorded in [docs/11-mediapipe-letterbox-v002.md](docs/11-mediapipe-letterbox-v002.md).
+The user-confirmed palm/back/side formal training protocol is recorded in
+[docs/12-surface3-training-v003.md](docs/12-surface3-training-v003.md).
 
 Before training, fill a real immutable pretrained-weight manifest from
 `data/manifests/pretrained-weights.template.json`. Its file hash must match the

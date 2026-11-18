@@ -82,6 +82,25 @@ class DatasetContractTest(unittest.TestCase):
         self.assertFalse(report["valid"])
         self.assertTrue(any("subject IDs leakage" in error for error in report["errors"]))
 
+    def test_low_count_gate_can_explicitly_allow_an_empty_class(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "a.bin").write_bytes(b"placeholder-image")
+            source = payload([image(1, "person-1", "session-a", "a.bin")])
+            source["categories"] = [
+                {"id": 1, "name": "palm"},
+                {"id": 2, "name": "back"},
+                {"id": 3, "name": "side"},
+            ]
+            source["annotations"] = [{"id": 1, "image_id": 1, "category_id": 1, "bbox": [1, 1, 4, 4], "area": 16, "iscrowd": 0}]
+            annotations = root / "gate.json"
+            annotations.write_text(json.dumps(source))
+            report = validate_splits(
+                [SplitSpec("gate", annotations, root)], decode_images=False,
+                category_ids={1: "palm", 2: "back", 3: "side"}, require_all_classes=False,
+            )
+        self.assertTrue(report["valid"])
+
     def test_connected_components_join_subject_and_session(self) -> None:
         groups = connected_components([
             image(1, "person-1", "session-a", "a"),

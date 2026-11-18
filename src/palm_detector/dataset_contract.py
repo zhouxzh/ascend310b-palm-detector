@@ -63,6 +63,7 @@ def validate_split(
     category_ids: dict[int, str] = COCO_CATEGORY_IDS,
     require_subject_id: bool = True,
     require_session_id: bool = True,
+    require_all_classes: bool = True,
 ) -> tuple[dict[str, Any], list[str], dict[str, set[str]]]:
     """Return report, violations, and IDs used by cross-split checks."""
     coco = load_coco(spec.annotation_path)
@@ -164,9 +165,10 @@ def validate_split(
         heights.append(height)
         areas.append(width * height)
 
-    for class_name in category_ids.values():
-        if class_counts[class_name] == 0:
-            errors.append(f"split has no {class_name} annotations")
+    if require_all_classes:
+        for class_name in category_ids.values():
+            if class_counts[class_name] == 0:
+                errors.append(f"split has no {class_name} annotations")
 
     report = {
         "split": spec.name,
