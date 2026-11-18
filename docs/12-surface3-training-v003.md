@@ -34,6 +34,11 @@ state.
 | NanoDet | Plus-m1.5 | 416 | AdamW 0.001, weight decay 0.05, 500-step warmup, cosine 300 epochs |
 | PicoDet | L / LCNet x2.0 | 416 | base LR 0.03 on one GPU, upstream 250-epoch schedule |
 
+The finalist comparison adds NanoDet-Plus-m and PicoDet-M/LCNet x1.5 at the
+same 416 input size. It uses the same split, LetterBox policy, side-aware
+sampling, and early-stop rule, while retaining each upstream backbone's
+validated batch size and linearly scaled base learning rate.
+
 Both models use MediaPipe-style centered zero-padded LetterBox at 416 square.
 Training applies label-preserving horizontal flip at 0.5 probability, mild
 isotropic scale (NanoDet), rotation/translation (NanoDet), and photometric

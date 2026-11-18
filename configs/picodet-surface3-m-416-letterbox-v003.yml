@@ -1,0 +1,38 @@
+schema_version: 3
+expected_variants: 1
+upstream:
+  repository: https://github.com/PaddlePaddle/PaddleDetection.git
+  ref: b25522a0f4bde8c80603f3ba5e3472059972e3b5
+  release: release/2.9
+dataset: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001
+validation:
+  dev: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_dev.json
+  gate: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_gate.json
+  test: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json
+classes: [palm, back, side]
+seed: 42
+reference_gpu_count: 4
+single_gpu_count: 1
+validation_interval: 5
+early_stop: {patience: 8, min_delta: 0.001}
+preprocessing:
+  mode: mediapipe_letterbox
+  pad_value: 0
+  flip_probability: 0.5
+  random_crop: false
+  random_distort: true
+sampling:
+  train_annotations: annotations/instances_train_balanced.json
+  side_repeat: 32
+pretrained:
+  lcnet-x15:
+    url: https://paddledet.bj.bcebos.com/models/pretrained/LCNet_x1_5_pretrained.pdparams
+    filename: LCNet_x1_5_pretrained.pdparams
+variants:
+  - id: picodet-m-416-surface3
+    config: configs/picodet/picodet_m_416_coco_lcnet.yml
+    input_size: 416
+    batch_size: 48
+    reference_lr: 0.24
+    epochs: 250
+    pretrained: lcnet-x15
