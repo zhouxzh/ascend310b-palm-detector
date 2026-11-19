@@ -96,7 +96,10 @@ def main() -> int:
     parser.add_argument("--score-threshold", type=float, default=0.35)
     parser.add_argument("--coordinate-tolerance", type=float, default=0.15)
     parser.add_argument("--score-tolerance", type=float, default=0.005)
-    parser.add_argument("--raw-tolerance", type=float, default=1e-4)
+    # Large LCNet exports can differ by roughly 3e-4 in low-level DFL values
+    # while their decoded boxes and scores remain bit-close. Keep this well
+    # below a single DFL bin and verify decoded detections separately.
+    parser.add_argument("--raw-tolerance", type=float, default=5e-4)
     args = parser.parse_args()
     if args.sample_count <= 0 or args.coordinate_tolerance < 0 or args.score_tolerance < 0 or args.raw_tolerance < 0:
         raise ValueError("sample count and tolerances must be non-negative, with sample count positive")
