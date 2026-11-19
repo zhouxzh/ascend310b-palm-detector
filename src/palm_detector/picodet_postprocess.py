@@ -71,6 +71,7 @@ def decode_picodet(
     reg_max: int = PICODET_REG_MAX,
     score_threshold: float = 0.35,
     nms_iou_threshold: float = 0.6,
+    keep_top_k: int | None = 100,
     letterbox: LetterboxTransform | None = None,
 ) -> list[list[Detection]]:
     """Decode raw PicoDet outputs: class probabilities then DFL values per level.
@@ -83,6 +84,8 @@ def decode_picodet(
         raise ValueError("class_names must not be empty")
     if not 0.0 <= score_threshold <= 1.0 or not 0.0 <= nms_iou_threshold <= 1.0:
         raise ValueError("score and NMS thresholds must be in [0, 1]")
+    if keep_top_k is not None and keep_top_k <= 0:
+        raise ValueError("keep_top_k must be positive or None")
     if reg_max < 1:
         raise ValueError("reg_max must be positive")
     if len(outputs) == 0 or len(outputs) % 2:
@@ -133,5 +136,6 @@ def decode_picodet(
                 Detection(tuple(float(value) for value in batch_boxes[index]), float(batch_scores[index, label]), label, class_names)
                 for index in kept
             )
-        decoded.append(sorted(detections, key=lambda item: item.score, reverse=True))
+        detections.sort(key=lambda item: item.score, reverse=True)
+        decoded.append(detections if keep_top_k is None else detections[:keep_top_k])
     return decoded

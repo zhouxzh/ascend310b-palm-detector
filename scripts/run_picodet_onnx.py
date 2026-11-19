@@ -20,6 +20,7 @@ def main() -> int:
     parser.add_argument("--image", type=Path, required=True)
     parser.add_argument("--score-threshold", type=float, default=0.35)
     parser.add_argument("--nms-iou-threshold", type=float, default=0.6)
+    parser.add_argument("--keep-top-k", type=int, default=100)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     run_dir = args.run_dir.resolve()
@@ -41,6 +42,7 @@ def main() -> int:
         input_size=target_size,
         score_threshold=args.score_threshold,
         nms_iou_threshold=args.nms_iou_threshold,
+        keep_top_k=args.keep_top_k,
         letterbox=letterbox,
     )[0]
     payload = {

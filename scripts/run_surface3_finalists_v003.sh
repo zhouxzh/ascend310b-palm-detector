@@ -65,3 +65,9 @@ if [[ ! -f "$PICO_RUN_DIR/test-eval/coco-metrics.json" ]]; then
     --ground-truth "$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json" \
     --predictions "$PICO_RUN_DIR/test-eval/bbox.json" --output "$PICO_RUN_DIR/test-eval/coco-metrics.json"
 fi
+if [[ ! -f "$PICO_RUN_DIR/picodet-onnx-decoder-check.json" ]]; then
+  PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/compare_picodet_onnx.py \
+    --run-dir "$PICO_RUN_DIR" --annotations "$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json" \
+    --images-root "$ROOT/data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/images" \
+    --output "$PICO_RUN_DIR/picodet-onnx-decoder-check.json"
+fi

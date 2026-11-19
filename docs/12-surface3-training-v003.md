@@ -79,7 +79,12 @@ Both PicoDet exports passed 20 deterministic Paddle/ONNX raw-output checks.
 PicoDet-M's maximum error was `5.19e-7`. Use
 `scripts/run_picodet_onnx.py --run-dir <completed-run> --image <image>` for
 the exact PicoDet RGB LetterBox preprocessing, DFL decoding, and class-aware
-NMS; the raw export alone does not contain an NMS node.
+NMS; the raw export alone does not contain an NMS node. The launch controller
+also compares ONNX raw heads and decoded detections against the native Paddle
+inference export on 20 rare-class-first test images under the same deployment
+preprocessing. PicoDet-M passed this image-level gate with maximum raw error
+`5.99e-5`, minimum decoded-box IoU `0.999998`, and maximum coordinate error
+`6.1e-5` pixels.
 
 The natural test split contains only 13 `side` instances. Its AP is retained
 as a deployment signal but is too high-variance to drive architecture or
