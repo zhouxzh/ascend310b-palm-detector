@@ -53,7 +53,7 @@ conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidi
 readonly PICODET_RUN_DIR="$PICODET_RUNS/$PICODET_RUN_ID"
 if [[ ! -f "$PICODET_RUN_DIR/picodet-onnx-check.json" ]]; then
   conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
-    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/export_picodet_onnx.py --run-dir "$PICODET_RUN_DIR" --upstream third_party/PaddleDetection --samples 3
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/export_picodet_onnx.py --run-dir "$PICODET_RUN_DIR" --upstream third_party/PaddleDetection --samples 20
 fi
 if [[ ! -f "$PICODET_RUN_DIR/test-eval/coco-metrics.json" ]]; then
   conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \

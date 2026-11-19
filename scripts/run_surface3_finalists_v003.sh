@@ -54,7 +54,7 @@ conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidi
     --inventory "$PICO_ROOT/variant-inventory.json" --state "$PICO_ROOT/sweep-state.json" --runs-root "$PICO_ROOT/runs" --run-prefix picodet-surface3-m-v003 --seed 42
 if [[ ! -f "$PICO_RUN_DIR/picodet-onnx-check.json" ]]; then
   conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
-    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/export_picodet_onnx.py --run-dir "$PICO_RUN_DIR" --upstream third_party/PaddleDetection --samples 3
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/export_picodet_onnx.py --run-dir "$PICO_RUN_DIR" --upstream third_party/PaddleDetection --samples 20
 fi
 if [[ ! -f "$PICO_RUN_DIR/test-eval/coco-metrics.json" ]]; then
   conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \

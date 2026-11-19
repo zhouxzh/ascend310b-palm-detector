@@ -26,6 +26,30 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def preprocessing_contract(config: dict) -> dict:
+    """Extract the deployment preprocessing contract from the generated config."""
+    transforms = config["TestReader"]["sample_transforms"]
+    letterbox = next((item["PalmLetterBox"] for item in transforms if "PalmLetterBox" in item), None)
+    normalize = next((item["NormalizeImage"] for item in transforms if "NormalizeImage" in item), None)
+    if letterbox is None or normalize is None or not any("Permute" in item for item in transforms):
+        raise ValueError("PicoDet ONNX export requires LetterBox, NormalizeImage, and Permute test transforms")
+    target_size = [int(value) for value in letterbox["target_size"]]
+    if len(target_size) != 2 or min(target_size) <= 0:
+        raise ValueError("PalmLetterBox target size must contain two positive dimensions")
+    return {
+        "decode_color": "RGB (OpenCV BGR decode converted by PaddleDetection Decode)",
+        "geometry": "centered_zero_padded_letterbox",
+        "target_size": target_size,
+        "pad_value": int(letterbox.get("pad_value", 0)),
+        "normalize": {
+            "scale": 1.0 / 255.0 if normalize.get("is_scale", False) else 1.0,
+            "mean": [float(value) for value in normalize["mean"]],
+            "std": [float(value) for value in normalize["std"]],
+        },
+        "layout": "NCHW",
+    }
+
+
 def prepare_pir_for_paddle2onnx(model_file: Path, conversion_dir: Path) -> tuple[Path, int]:
     """Make a converter-only copy with PicoDet resize scales in float32.
 
@@ -62,7 +86,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--upstream", type=Path, default=ROOT / "third_party/PaddleDetection")
-    parser.add_argument("--samples", type=int, default=3)
+    parser.add_argument("--samples", type=int, default=20)
     args = parser.parse_args()
     args.run_dir = args.run_dir.resolve()
     args.upstream = args.upstream.resolve()
@@ -71,6 +95,7 @@ def main() -> int:
     if not checkpoint.with_suffix(".pdparams").is_file():
         raise FileNotFoundError("best PicoDet checkpoint is missing")
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    preprocess = preprocessing_contract(config)
     run_metadata = json.loads((args.run_dir / "run.json").read_text(encoding="utf-8"))
     classes = tuple(run_metadata.get("classes", ("left_palm", "right_palm") if int(config["num_classes"]) == 2 else ()))
     if len(classes) != int(config["num_classes"]):
@@ -134,12 +159,15 @@ def main() -> int:
         "onnx": str(onnx_path), "sha256": sha256(onnx_path), "input": [1, 3, height, width],
         "paddle_model": str(model_file), "inputs": inputs, "outputs": outputs, "samples": samples,
         "paddle2onnx_compatibility_patch_count": conversion_patch_count,
+        "preprocessing": preprocess,
+        "output_contract": "raw PicoDet per-level sigmoid class probabilities followed by DFL box distributions; deployment must decode and apply class-aware NMS",
     }
     report_path = args.run_dir / "picodet-onnx-check.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     card = args.run_dir / "picodet-model-card.md"
+    task_name = "PicoDet Palm Surface Detector" if classes == ("palm", "back", "side") else "PicoDet Palm Detector"
     card.write_text(
-        f"# PicoDet Palm Detector\n\n- Run: `{args.run_dir.name}`\n- Classes: {', '.join(f'`{name}`' for name in classes)}\n- Input: `image`, float32, `1x3x{height}x{width}`\n- ONNX: `{onnx_path.name}`\n- ONNX SHA-256: `{report['sha256']}`\n- Raw Paddle/ONNX report: `{report_path.name}`\n",
+        f"# {task_name}\n\n- Run: `{args.run_dir.name}`\n- Classes: {', '.join(f'`{name}`' for name in classes)}\n- Input: `image`, float32, `1x3x{height}x{width}`\n- Preprocess: RGB decode, centered zero-padded LetterBox, `/255`, ImageNet mean/std, NCHW. Exact values: `picodet-onnx-check.json`.\n- Output: raw per-level sigmoid class probabilities and DFL box distributions; apply the matching decoder and class-aware NMS.\n- ONNX: `{onnx_path.name}`\n- ONNX SHA-256: `{report['sha256']}`\n- Raw Paddle/ONNX report: `{report_path.name}` ({len(samples)} deterministic random tensors)\n",
         encoding="utf-8",
     )
     print(report_path)
