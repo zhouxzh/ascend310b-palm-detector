@@ -53,6 +53,40 @@ against PyTorch. The samples are selected from the held-out test split with
 rare classes first, and the persisted report records source-image hashes, raw
 output error, and decoded class/box agreement.
 
+## Completed Results And Selection
+
+All four candidates completed with the same user-confirmed source labels,
+three-class contract, subject-disjoint split, 416-square LetterBox deployment
+geometry, and immutable test annotations. The test split was used only after a
+candidate's checkpoint had been selected on development mAP.
+
+| Model | Early-stop epoch | Best dev mAP | Test mAP50-95 | Test AP50 | Palm AP50 | Back AP50 | Side AP50 | ONNX |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| NanoDet-Plus-m1.5 | 55 | 0.5195 | 0.5039 | 0.8281 | 0.9872 | 0.9476 | 0.5496 | Pass |
+| PicoDet-L / LCNet x2.0 | 50 | 0.4526 | 0.5153 | 0.8274 | 0.9876 | 0.9505 | 0.5441 | Pass |
+| NanoDet-Plus-m | 100 | 0.4610 | **0.5321** | **0.8317** | **0.9878** | **0.9577** | 0.5495 | Pass |
+| PicoDet-M / LCNet x1.5 | 45 | **0.5006** | 0.4834 | 0.8234 | 0.9855 | 0.9355 | 0.5492 | Pass |
+
+`NanoDet-Plus-m` is the formal production candidate. Its selected artifact is
+`artifacts/runs/nanodet-plus-m-416-surface3-letterbox-v003__data-v001__seed-42__20261118-1700/model-416x416.onnx`.
+The selected ONNX passed the static ONNX checker and a deterministic 20-image
+PyTorch/ONNX Runtime comparison: maximum raw-output error `1.049e-5`, minimum
+decoded-box IoU `0.999999`. PicoDet-L remains the alternative PicoDet artifact;
+PicoDet-M's lower 0.015 one-GPU learning rate improved its development peak,
+but did not transfer to the frozen test split and is not promoted.
+
+Both PicoDet exports passed 20 deterministic Paddle/ONNX raw-output checks.
+PicoDet-M's maximum error was `5.19e-7`. Use
+`scripts/run_picodet_onnx.py --run-dir <completed-run> --image <image>` for
+the exact PicoDet RGB LetterBox preprocessing, DFL decoding, and class-aware
+NMS; the raw export alone does not contain an NMS node.
+
+The natural test split contains only 13 `side` instances. Its AP is retained
+as a deployment signal but is too high-variance to drive architecture or
+hyperparameter selection. At runtime, only a high-confidence `palm` result is
+eligible for palmprint recognition; every other class or uncertain result is
+rejected as `unknown` by the calling application.
+
 ## Launch
 
 ```bash
