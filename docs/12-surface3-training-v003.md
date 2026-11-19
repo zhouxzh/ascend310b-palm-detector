@@ -37,7 +37,10 @@ state.
 The finalist comparison adds NanoDet-Plus-m and PicoDet-M/LCNet x1.5 at the
 same 416 input size. It uses the same split, LetterBox policy, side-aware
 sampling, and early-stop rule, while retaining each upstream backbone's
-validated batch size and linearly scaled base learning rate.
+validated batch size. PicoDet-M uses a 0.015 single-GPU starting learning rate:
+the preceding PicoDet-L trial peaked on development mAP at epoch 10 and then
+regressed with the generic 0.03 linearly scaled COCO rate. This makes the
+learning-rate change an explicit, recorded surface-task tuning comparison.
 
 Both models use MediaPipe-style centered zero-padded LetterBox at 416 square.
 Training applies label-preserving horizontal flip at 0.5 probability, mild

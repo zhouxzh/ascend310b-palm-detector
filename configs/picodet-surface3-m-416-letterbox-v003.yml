@@ -33,6 +33,10 @@ variants:
     config: configs/picodet/picodet_m_416_coco_lcnet.yml
     input_size: 416
     batch_size: 48
-    reference_lr: 0.24
+    # The L/0.03 trial peaked at epoch 10 then regressed on the same
+    # side-oversampled surface data. Use a quarter of its single-GPU LR for
+    # this independent M-backbone comparison rather than reusing the generic
+    # COCO linear-scaling value of 0.06.
+    reference_lr: 0.06
     epochs: 250
     pretrained: lcnet-x15
