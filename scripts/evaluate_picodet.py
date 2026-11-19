@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -49,7 +50,12 @@ def main() -> int:
     if not prediction.is_file():
         raise FileNotFoundError("PicoDet evaluation did not emit bbox.json")
     print(prediction)
-    return 0
+    # Paddle 3.5 may spin indefinitely during interpreter teardown after a
+    # completed GPU evaluation. All artifacts are durable at this point; end
+    # this one-shot subprocess without entering that teardown path.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":

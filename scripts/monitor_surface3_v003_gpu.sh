@@ -20,6 +20,7 @@ while true; do
       pgrep -f '[t]rain_nanodet_sweep.py.*surface3' | xargs -r kill -TERM
       pgrep -f '[t]rain_picodet.py.*surface3' | xargs -r kill -TERM
       pgrep -f '[r]un_surface3_v003.sh' | xargs -r kill -TERM
+      pgrep -f '[r]un_surface3_finalists_v003.sh' | xargs -r kill -TERM
       break
     fi
   else
