@@ -167,7 +167,7 @@ def main() -> int:
     card = args.run_dir / "picodet-model-card.md"
     task_name = "PicoDet Palm Surface Detector" if classes == ("palm", "back", "side") else "PicoDet Palm Detector"
     card.write_text(
-        f"# {task_name}\n\n- Run: `{args.run_dir.name}`\n- Classes: {', '.join(f'`{name}`' for name in classes)}\n- Input: `image`, float32, `1x3x{height}x{width}`\n- Preprocess: RGB decode, centered zero-padded LetterBox, `/255`, ImageNet mean/std, NCHW. Exact values: `picodet-onnx-check.json`.\n- Output: raw per-level sigmoid class probabilities and DFL box distributions; apply the matching decoder and class-aware NMS.\n- ONNX: `{onnx_path.name}`\n- ONNX SHA-256: `{report['sha256']}`\n- Raw Paddle/ONNX report: `{report_path.name}` ({len(samples)} deterministic random tensors)\n",
+        f"# {task_name}\n\n- Run: `{args.run_dir.name}`\n- Classes: {', '.join(f'`{name}`' for name in classes)}\n- Input: `image`, float32, `1x3x{height}x{width}`\n- Preprocess: RGB decode, centered zero-padded LetterBox, `/255`, ImageNet mean/std, NCHW. Exact values: `picodet-onnx-check.json`.\n- Output: raw per-level sigmoid class probabilities and DFL box distributions; `scripts/run_picodet_onnx.py` supplies the matching decoder and class-aware NMS.\n- ONNX: `{onnx_path.name}`\n- ONNX SHA-256: `{report['sha256']}`\n- Raw Paddle/ONNX report: `{report_path.name}` ({len(samples)} deterministic random tensors)\n",
         encoding="utf-8",
     )
     print(report_path)
