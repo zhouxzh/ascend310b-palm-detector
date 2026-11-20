@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+import cv2
 import numpy as np
 
 from palm_detector.postprocess import INPUT_HEIGHT, INPUT_WIDTH, center_priors, decode_nanodet_plus, preprocess_bgr
@@ -65,9 +66,19 @@ class PostprocessTest(unittest.TestCase):
         image = np.full((32, 16, 3), (127, 128, 129), dtype=np.uint8)
         tensor, _ = preprocess_bgr(image, input_size=(416, 416), mean=(127, 128, 129), std=(128, 128, 128))
         self.assertEqual(tensor.shape, (1, 3, 416, 416))
-        self.assertTrue(np.all(tensor == 0))
+        # The direct-stretch path mirrors NanoDet's warpPerspective sampling;
+        # verify an in-bounds source-aligned pixel rather than border pixels.
+        np.testing.assert_array_equal(tensor[0, :, 0, 0], np.zeros(3, dtype=np.float32))
         with self.assertRaisesRegex(ValueError, "mean and std"):
             preprocess_bgr(image, std=(1, 0, 1))
+
+    def test_direct_stretch_matches_nanodet_warp_sampling(self) -> None:
+        image = np.arange(3 * 5 * 3, dtype=np.uint8).reshape(3, 5, 3)
+        tensor, scales = preprocess_bgr(image, input_size=(4, 8), mean=(0, 0, 0), std=(1, 1, 1))
+        matrix = np.array([[8 / 5, 0.0, 0.0], [0.0, 4 / 3, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64)
+        expected = cv2.warpPerspective(image, matrix, dsize=(8, 4)).astype(np.float32).transpose(2, 0, 1)[None, ...]
+        np.testing.assert_array_equal(tensor, expected)
+        self.assertEqual(scales, (8 / 5, 4 / 3))
 
     def test_legacy_half_cell_origin_and_ten_bin_regression(self) -> None:
         size = 416

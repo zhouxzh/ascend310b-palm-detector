@@ -123,6 +123,11 @@ annotations, seed, batch size, learning rate, early-stop policy, and frozen
 test split. The sole planned model-input change is direct resize to 320 square:
 no zero padding and `keep_ratio=false`.
 
+For NanoDet, deployment uses the upstream `ShapeTransform` direct-resize
+sampling rule (`warpPerspective` with independent x/y scales), rather than a
+similar-but-not-identical `cv2.resize` call. This keeps ONNX input pixels
+identical to the validation geometry.
+
 Random anisotropic stretch is deliberately disabled in this primary comparison.
 Direct resize already changes x and y scale independently according to each
 image's aspect ratio. Adding a random second stretch would conflate the

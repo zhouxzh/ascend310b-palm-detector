@@ -52,8 +52,15 @@ def preprocess_bgr(
     except ImportError as exc:
         raise RuntimeError("OpenCV is required for deployment preprocessing") from exc
     height, width = image.shape[:2]
-    resized = cv2.resize(image, (input_width, input_height), interpolation=cv2.INTER_LINEAR)
-    normalized = (resized.astype(np.float32) - mean) / std
+    # NanoDet ShapeTransform implements direct resize as a perspective warp
+    # with independent x/y scales. Match that sampling rule exactly instead
+    # of using cv2.resize, whose pixel-center convention differs subtly.
+    matrix = np.array(
+        [[input_width / width, 0.0, 0.0], [0.0, input_height / height, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    stretched = cv2.warpPerspective(image, matrix, dsize=(input_width, input_height))
+    normalized = (stretched.astype(np.float32) - mean) / std
     return normalized.transpose(2, 0, 1)[None, ...], (input_width / width, input_height / height)
 
 
