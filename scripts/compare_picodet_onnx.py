@@ -13,7 +13,8 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr_letterbox
+from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr, preprocess_picodet_bgr_letterbox
+from palm_detector.postprocess import Detection
 
 
 def xywh_to_xyxy(box: list[float]) -> np.ndarray:
@@ -86,6 +87,20 @@ def deterministic_sample(images: list[dict[str, Any]], annotations: list[dict[st
     return [by_id[image_id] for image_id in selected]
 
 
+def unscale_direct_detections(detections: list[Detection], image_shape: tuple[int, int], input_size: tuple[int, int]) -> list[Detection]:
+    original_height, original_width = image_shape
+    input_height, input_width = input_size
+    scale_x = original_width / input_width
+    scale_y = original_height / input_height
+    return [
+        Detection(
+            (item.xyxy[0] * scale_x, item.xyxy[1] * scale_y, item.xyxy[2] * scale_x, item.xyxy[3] * scale_y),
+            item.score, item.label, item.class_names,
+        )
+        for item in detections
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
@@ -111,6 +126,7 @@ def main() -> int:
     classes = tuple(metadata["classes"])
     annotation = json.loads(args.annotations.read_text(encoding="utf-8"))
     target_size = tuple(int(value) for value in check["preprocessing"]["target_size"])
+    geometry = check["preprocessing"]["geometry"]
     model_path = run_dir / f"picodet-{target_size[1]}x{target_size[0]}.onnx"
     session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
     import paddle
@@ -128,7 +144,20 @@ def main() -> int:
         image = cv2.imread(str(image_path))
         if image is None:
             raise ValueError(f"cannot decode image: {image_path}")
-        tensor, letterbox = preprocess_picodet_bgr_letterbox(image, input_size=target_size)
+        if geometry == "centered_zero_padded_letterbox":
+            tensor, letterbox = preprocess_picodet_bgr_letterbox(image, input_size=target_size)
+            direct_stretch = False
+        elif geometry == "direct_stretch":
+            tensor = preprocess_picodet_bgr(
+                image, input_size=target_size,
+                mean_rgb=check["preprocessing"]["normalize"]["mean"],
+                std_rgb=check["preprocessing"]["normalize"]["std"],
+                interpolation=int(check["preprocessing"].get("interp", 2)),
+            )
+            letterbox = None
+            direct_stretch = True
+        else:
+            raise ValueError(f"unsupported PicoDet preprocessing geometry: {geometry}")
         input_handle = predictor.get_input_handle("image")
         input_handle.copy_from_cpu(tensor)
         predictor.run()
@@ -145,6 +174,9 @@ def main() -> int:
             onnx_outputs, class_names=classes, input_size=target_size, score_threshold=args.score_threshold,
             nms_iou_threshold=0.6, keep_top_k=100, letterbox=letterbox,
         )[0]
+        if direct_stretch:
+            paddle_detections = unscale_direct_detections(paddle_detections, image.shape[:2], target_size)
+            onnx_detections = unscale_direct_detections(onnx_detections, image.shape[:2], target_size)
         expected = [{"category_id": item.label + 1, "score": item.score, "bbox": [
             item.xyxy[0], item.xyxy[1], item.xyxy[2] - item.xyxy[0], item.xyxy[3] - item.xyxy[1]
         ]} for item in paddle_detections]

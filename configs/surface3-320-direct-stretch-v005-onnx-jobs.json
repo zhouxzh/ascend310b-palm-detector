@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "jobs": [
+    {
+      "name": "nanodet-plus-m-320-stretch",
+      "family": "nanodet",
+      "geometry": "direct_stretch",
+      "category_contract": "surface3",
+      "onnx": "artifacts/runs/nanodet-plus-m-320-surface3-stretch-v005__data-v001__seed-42__20261120-0000/model-320x320.onnx",
+      "annotations": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json",
+      "images_root": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/images",
+      "input_size": [320, 320],
+      "center_offset": 0.0,
+      "score_threshold": 0.05,
+      "nms_iou": 0.6,
+      "expected_images": 1555
+    },
+    {
+      "name": "nanodet-plus-m15-320-stretch",
+      "family": "nanodet",
+      "geometry": "direct_stretch",
+      "category_contract": "surface3",
+      "onnx": "artifacts/runs/nanodet-plus-m15-320-surface3-stretch-v005__data-v001__seed-42__20261120-0000/model-320x320.onnx",
+      "annotations": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json",
+      "images_root": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/images",
+      "input_size": [320, 320],
+      "center_offset": 0.0,
+      "score_threshold": 0.05,
+      "nms_iou": 0.6,
+      "expected_images": 1555
+    },
+    {
+      "name": "picodet-l-320-stretch",
+      "family": "picodet",
+      "geometry": "direct_stretch",
+      "category_contract": "surface3",
+      "onnx": "artifacts/picodet-surface3-320-stretch-v005/runs/picodet-surface3-320-stretch-v005-picodet-l-320-surface3-stretch-seed-42/picodet-320x320.onnx",
+      "annotations": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json",
+      "images_root": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/images",
+      "input_size": [320, 320],
+      "score_threshold": 0.025,
+      "nms_iou": 0.6,
+      "keep_top_k": 100,
+      "expected_images": 1555
+    },
+    {
+      "name": "picodet-m-320-stretch",
+      "family": "picodet",
+      "geometry": "direct_stretch",
+      "category_contract": "surface3",
+      "onnx": "artifacts/picodet-surface3-320-stretch-v005/runs/picodet-surface3-320-stretch-v005-picodet-m-320-surface3-stretch-seed-42/picodet-320x320.onnx",
+      "annotations": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json",
+      "images_root": "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/images",
+      "input_size": [320, 320],
+      "score_threshold": 0.025,
+      "nms_iou": 0.6,
+      "keep_top_k": 100,
+      "expected_images": 1555
+    }
+  ]
+}

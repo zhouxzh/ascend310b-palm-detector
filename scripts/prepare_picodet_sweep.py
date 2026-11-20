@@ -60,15 +60,17 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
             {"PadGT": {}},
         ]
     else:
-        train_transforms = [
-            {"Decode": {}},
-            {"RandomCrop": {}},
-            {"RandomFlip": {"prob": 0.0}},
-            {"RandomDistort": {}},
-        ]
+        train_transforms = [{"Decode": {}}]
+        if preprocessing.get("random_crop", True):
+            train_transforms.append({"RandomCrop": {}})
+        train_transforms.append({
+            "RandomFlip": {"prob": 0.0 if classes == ("left_palm", "right_palm") else float(preprocessing.get("flip_probability", 0.5))}
+        })
+        if preprocessing.get("random_distort", True):
+            train_transforms.append({"RandomDistort": {}})
         eval_transforms = [
             {"Decode": {}},
-            {"Resize": {"interp": 2, "target_size": [size, size], "keep_ratio": False}},
+            {"Resize": {"interp": int(preprocessing.get("resize_interpolation", 2)), "target_size": [size, size], "keep_ratio": False}},
         ]
         train_batch_transforms = [
             {"BatchRandomResize": {"target_size": [size, size], "random_size": False, "random_interp": False, "keep_ratio": False}},

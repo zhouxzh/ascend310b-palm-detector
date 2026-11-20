@@ -85,3 +85,30 @@ class PreparePicoDetSweepTest(unittest.TestCase):
             self.assertIn({"PalmHandednessFlip": {"prob": 0.5}}, generated["TrainReader"]["sample_transforms"])
             self.assertIn({"PalmLetterBox": {"target_size": [320, 320], "pad_value": 0}}, generated["TrainReader"]["sample_transforms"])
             self.assertNotIn("BatchRandomResize", str(generated["TrainReader"]["batch_transforms"]))
+
+    def test_direct_stretch_surface_recipe_preserves_label_flip_without_crop(self) -> None:
+        path = Path(__file__).resolve().parents[1] / "scripts/prepare_picodet_sweep.py"
+        spec = importlib.util.spec_from_file_location("prepare_picodet_sweep_stretch", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            upstream = root / "upstream"
+            source = upstream / "configs/picodet/picodet_m_320_coco_lcnet.yml"
+            source.parent.mkdir(parents=True)
+            source.write_text("architecture: PicoDet\n")
+            matrix = {
+                "reference_gpu_count": 4, "single_gpu_count": 1,
+                "classes": ["palm", "back", "side"], "dataset": str(root),
+                "validation": {key: str(root / f"{key}.json") for key in ("dev", "gate", "test")},
+                "seed": 42, "validation_interval": 5, "early_stop": {"patience": 8, "min_delta": 0.001},
+                "preprocessing": {"mode": "direct_stretch", "flip_probability": 0.5, "random_crop": False, "random_distort": True, "resize_interpolation": 2},
+                "pretrained": {"lcnet-x15": {"url": "https://weights.invalid/x15", "filename": "x15.pdparams"}},
+            }
+            item = {"id": "picodet-m-320-surface3-stretch", "config": "configs/picodet/picodet_m_320_coco_lcnet.yml", "input_size": 320, "batch_size": 48, "reference_lr": 0.06, "epochs": 250, "pretrained": "lcnet-x15"}
+            generated = module.build_config(item, matrix, upstream)["training_config"]
+            self.assertEqual(generated["TrainReader"]["sample_transforms"], [
+                {"Decode": {}}, {"RandomFlip": {"prob": 0.5}}, {"RandomDistort": {}},
+            ])
+            self.assertEqual(generated["EvalReader"]["sample_transforms"][1], {"Resize": {"interp": 2, "target_size": [320, 320], "keep_ratio": False}})
+            self.assertEqual(generated["TrainReader"]["batch_transforms"][0]["BatchRandomResize"], {"target_size": [320, 320], "random_size": False, "random_interp": False, "keep_ratio": False})

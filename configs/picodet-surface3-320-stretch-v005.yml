@@ -1,0 +1,52 @@
+# Geometry-only ablation against the 320 LetterBox PicoDet surface models.
+schema_version: 5
+expected_variants: 2
+upstream:
+  repository: https://github.com/PaddlePaddle/PaddleDetection.git
+  ref: b25522a0f4bde8c80603f3ba5e3472059972e3b5
+  release: release/2.9
+dataset: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001
+validation:
+  dev: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_dev.json
+  gate: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_gate.json
+  test: data/portable-hagridv2-mediapipe-hand/coco-surface3-v001/annotations/instances_test.json
+classes: [palm, back, side]
+seed: 42
+reference_gpu_count: 4
+single_gpu_count: 1
+validation_interval: 5
+early_stop: {patience: 8, min_delta: 0.001}
+preprocessing:
+  mode: direct_stretch
+  resize_interpolation: 2
+  flip_probability: 0.5
+  random_crop: false
+  random_distort: true
+  random_anisotropic_stretch: false
+sampling:
+  train_annotations: annotations/instances_train_balanced.json
+  side_repeat: 32
+pretrained:
+  lcnet-x15:
+    url: https://paddledet.bj.bcebos.com/models/pretrained/LCNet_x1_5_pretrained.pdparams
+    filename: LCNet_x1_5_pretrained.pdparams
+  lcnet-x20:
+    url: https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/legendary_models/PPLCNet_x2_0_pretrained.pdparams
+    filename: PPLCNet_x2_0_pretrained.pdparams
+variants:
+  - id: picodet-l-320-surface3-stretch
+    config: configs/picodet/picodet_l_320_coco_lcnet.yml
+    input_size: 320
+    # Preserve the paired LetterBox batch and one-GPU LR.
+    batch_size: 24
+    reference_lr: 0.12
+    epochs: 250
+    pretrained: lcnet-x20
+  - id: picodet-m-320-surface3-stretch
+    config: configs/picodet/picodet_m_320_coco_lcnet.yml
+    input_size: 320
+    # Preserve the paired LetterBox batch and one-GPU LR.
+    batch_size: 48
+    reference_lr: 0.06
+    epochs: 250
+    pretrained: lcnet-x15

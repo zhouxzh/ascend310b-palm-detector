@@ -30,17 +30,39 @@ def preprocessing_contract(config: dict) -> dict:
     """Extract the deployment preprocessing contract from the generated config."""
     transforms = config["TestReader"]["sample_transforms"]
     letterbox = next((item["PalmLetterBox"] for item in transforms if "PalmLetterBox" in item), None)
+    resize = next((item["Resize"] for item in transforms if "Resize" in item), None)
     normalize = next((item["NormalizeImage"] for item in transforms if "NormalizeImage" in item), None)
-    if letterbox is None or normalize is None or not any("Permute" in item for item in transforms):
-        raise ValueError("PicoDet ONNX export requires LetterBox, NormalizeImage, and Permute test transforms")
-    target_size = [int(value) for value in letterbox["target_size"]]
-    if len(target_size) != 2 or min(target_size) <= 0:
-        raise ValueError("PalmLetterBox target size must contain two positive dimensions")
+    if normalize is None or not any("Permute" in item for item in transforms):
+        raise ValueError("PicoDet ONNX export requires NormalizeImage and Permute test transforms")
+    if letterbox is not None and resize is not None:
+        raise ValueError("PicoDet test transforms must not combine LetterBox and Resize")
+    if letterbox is None and resize is None:
+        raise ValueError("PicoDet ONNX export requires LetterBox or Resize test transforms")
+    if letterbox is not None:
+        target_size = [int(value) for value in letterbox["target_size"]]
+        if len(target_size) != 2 or min(target_size) <= 0:
+            raise ValueError("PalmLetterBox target size must contain two positive dimensions")
+        geometry = {
+            "geometry": "centered_zero_padded_letterbox",
+            "target_size": target_size,
+            "pad_value": int(letterbox.get("pad_value", 0)),
+            "keep_ratio": True,
+        }
+    else:
+        target_size = [int(value) for value in resize["target_size"]]
+        if len(target_size) != 2 or min(target_size) <= 0:
+            raise ValueError("Resize target size must contain two positive dimensions")
+        if resize.get("keep_ratio", False):
+            raise ValueError("PicoDet stretch export requires keep_ratio=false")
+        geometry = {
+            "geometry": "direct_stretch",
+            "target_size": target_size,
+            "interp": int(resize.get("interp", 2)),
+            "keep_ratio": False,
+        }
     return {
         "decode_color": "RGB (OpenCV BGR decode converted by PaddleDetection Decode)",
-        "geometry": "centered_zero_padded_letterbox",
-        "target_size": target_size,
-        "pad_value": int(letterbox.get("pad_value", 0)),
+        **geometry,
         "normalize": {
             "scale": 1.0 / 255.0 if normalize.get("is_scale", False) else 1.0,
             "mean": [float(value) for value in normalize["mean"]],
@@ -105,11 +127,12 @@ def main() -> int:
     env = os.environ.copy()
     env["PYTHONPATH"] = f"{ROOT / 'src'}:{args.upstream}:{env.get('PYTHONPATH', '')}"
     env["FLAGS_json_format_model"] = "1"
+    env["CUDA_VISIBLE_DEVICES"] = ""
     command = [
         sys.executable, str(ROOT / "scripts/export_picodet_model.py"), "-c", str(config_path.resolve()),
         "--output_dir", str(export_root), "-o", f"weights={checkpoint}",
         "export.post_process=False", "export.nms=False", "export.benchmark=True",
-        "export_with_pir=True",
+        "export_with_pir=True", "use_gpu=false",
     ]
     subprocess.run(command, cwd=args.upstream, env=env, check=True)
     candidates = sorted(export_root.rglob("model.json")) + sorted(export_root.rglob("model.pdmodel"))
@@ -120,8 +143,11 @@ def main() -> int:
     conversion_model, conversion_patch_count = prepare_pir_for_paddle2onnx(
         model_file, args.run_dir / "onnx-conversion")
     onnx_path = args.run_dir / f"picodet-{width}x{height}.onnx"
+    paddle2onnx = Path(sys.executable).with_name("paddle2onnx")
+    if not paddle2onnx.is_file():
+        raise FileNotFoundError(f"paddle2onnx is missing next to {sys.executable}")
     subprocess.run([
-        "paddle2onnx", "--model_dir", str(conversion_model.parent), "--model_filename", conversion_model.name,
+        str(paddle2onnx), "--model_dir", str(conversion_model.parent), "--model_filename", conversion_model.name,
         "--params_filename", params_file.name, "--opset_version", "11", "--save_file", str(onnx_path),
     ], cwd=ROOT, env=env, check=True)
     import onnx
@@ -132,7 +158,7 @@ def main() -> int:
     onnx.checker.check_model(model)
     inputs = [{"name": item.name, "shape": [dim.dim_value or dim.dim_param for dim in item.type.tensor_type.shape.dim]} for item in model.graph.input]
     outputs = [{"name": item.name, "shape": [dim.dim_value or dim.dim_param for dim in item.type.tensor_type.shape.dim]} for item in model.graph.output]
-    paddle.set_device("gpu:0")
+    paddle.set_device("cpu")
     predictor_config = paddle.inference.Config(str(model_file.resolve()), str(params_file.resolve()))
     predictor_config.disable_glog_info()
     predictor_config.disable_gpu()
@@ -166,8 +192,21 @@ def main() -> int:
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     card = args.run_dir / "picodet-model-card.md"
     task_name = "PicoDet Palm Surface Detector" if classes == ("palm", "back", "side") else "PicoDet Palm Detector"
+    geometry = str(preprocess["geometry"])
     card.write_text(
-        f"# {task_name}\n\n- Run: `{args.run_dir.name}`\n- Classes: {', '.join(f'`{name}`' for name in classes)}\n- Input: `image`, float32, `1x3x{height}x{width}`\n- Preprocess: RGB decode, centered zero-padded LetterBox, `/255`, ImageNet mean/std, NCHW. Exact values: `picodet-onnx-check.json`.\n- Output: raw per-level sigmoid class probabilities and DFL box distributions; `scripts/run_picodet_onnx.py` supplies the matching decoder and class-aware NMS.\n- ONNX: `{onnx_path.name}`\n- ONNX SHA-256: `{report['sha256']}`\n- Raw Paddle/ONNX report: `{report_path.name}` ({len(samples)} deterministic random tensors)\n",
+        "\n".join([
+            f"# {task_name}",
+            "",
+            f"- Run: `{args.run_dir.name}`",
+            "- Classes: " + ", ".join(f"`{name}`" for name in classes),
+            f"- Input: `image`, float32, `1x3x{height}x{width}`",
+            f"- Preprocess: RGB decode, `{geometry}`, `/255`, ImageNet mean/std, NCHW. Exact values: `picodet-onnx-check.json`.",
+            "- Output: raw per-level sigmoid class probabilities and DFL box distributions; `scripts/run_picodet_onnx.py` supplies the matching decoder and class-aware NMS.",
+            f"- ONNX: `{onnx_path.name}`",
+            f"- ONNX SHA-256: `{report['sha256']}`",
+            f"- Raw Paddle/ONNX report: `{report_path.name}` ({len(samples)} deterministic random tensors)",
+            "",
+        ]),
         encoding="utf-8",
     )
     print(report_path)

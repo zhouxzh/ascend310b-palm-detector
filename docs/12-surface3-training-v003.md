@@ -113,6 +113,26 @@ it would confound a resolution comparison. The controller exports and validates
 each static 320 ONNX artifact before its frozen test metrics enter the combined
 comparison table.
 
+## Direct-Stretch Ablation
+
+`scripts/run_surface3_320_stretch_v005.sh` is the paired `320x320` geometric
+ablation against the completed 320 LetterBox candidates. It trains the same
+four architectures: NanoDet-Plus-m, NanoDet-Plus-m1.5, PicoDet-L, and
+PicoDet-M. It retains the same human-confirmed surface labels, balanced train
+annotations, seed, batch size, learning rate, early-stop policy, and frozen
+test split. The sole planned model-input change is direct resize to 320 square:
+no zero padding and `keep_ratio=false`.
+
+Random anisotropic stretch is deliberately disabled in this primary comparison.
+Direct resize already changes x and y scale independently according to each
+image's aspect ratio. Adding a random second stretch would conflate the
+LetterBox comparison with a separate augmentation hypothesis and could degrade
+the geometry needed downstream for palmprint ROI extraction. Existing
+label-preserving flip, isotropic NanoDet scale, rotation/translation, and
+photometric distortion remain enabled. A random-stretch experiment is only
+meaningful as a separate follow-up if direct stretch first beats LetterBox on
+the frozen test metric.
+
 ## Launch
 
 ```bash

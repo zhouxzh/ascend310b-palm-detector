@@ -10,8 +10,22 @@ from pathlib import Path
 import cv2
 import onnxruntime as ort
 
-from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr_letterbox
-from palm_detector.postprocess import detections_to_json
+from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr, preprocess_picodet_bgr_letterbox
+from palm_detector.postprocess import Detection, detections_to_json
+
+
+def _unscale_direct_detections(detections: list[Detection], image_shape: tuple[int, int], input_size: tuple[int, int]) -> list[Detection]:
+    original_height, original_width = image_shape
+    input_height, input_width = input_size
+    scale_x = original_width / input_width
+    scale_y = original_height / input_height
+    return [
+        Detection(
+            (item.xyxy[0] * scale_x, item.xyxy[1] * scale_y, item.xyxy[2] * scale_x, item.xyxy[3] * scale_y),
+            item.score, item.label, item.class_names,
+        )
+        for item in detections
+    ]
 
 
 def main() -> int:
@@ -33,7 +47,21 @@ def main() -> int:
     image = cv2.imread(str(args.image))
     if image is None:
         raise ValueError(f"cannot decode image: {args.image}")
-    tensor, letterbox = preprocess_picodet_bgr_letterbox(image, input_size=target_size)
+    geometry = report["preprocessing"]["geometry"]
+    if geometry == "centered_zero_padded_letterbox":
+        tensor, letterbox = preprocess_picodet_bgr_letterbox(image, input_size=target_size)
+        direct_stretch = False
+    elif geometry == "direct_stretch":
+        tensor = preprocess_picodet_bgr(
+            image, input_size=target_size,
+            mean_rgb=report["preprocessing"]["normalize"]["mean"],
+            std_rgb=report["preprocessing"]["normalize"]["std"],
+            interpolation=int(report["preprocessing"].get("interp", 2)),
+        )
+        letterbox = None
+        direct_stretch = True
+    else:
+        raise ValueError(f"unsupported PicoDet preprocessing geometry: {geometry}")
     session = ort.InferenceSession(str(run_dir / f"picodet-{target_size[1]}x{target_size[0]}.onnx"), providers=["CPUExecutionProvider"])
     outputs = session.run(None, {session.get_inputs()[0].name: tensor})
     detections = decode_picodet(
@@ -45,6 +73,8 @@ def main() -> int:
         keep_top_k=args.keep_top_k,
         letterbox=letterbox,
     )[0]
+    if direct_stretch:
+        detections = _unscale_direct_detections(detections, image.shape[:2], target_size)
     payload = {
         "image": str(args.image.resolve()),
         "model": str(run_dir / f"picodet-{target_size[1]}x{target_size[0]}.onnx"),

@@ -35,6 +35,7 @@ def main() -> int:
     parser.add_argument("--nanodet-config", type=Path, default=NANODET_CONFIG)
     parser.add_argument("--picodet-matrix", type=Path, default=PICODET_MATRIX)
     parser.add_argument("--expected-input-size", type=int)
+    parser.add_argument("--geometry", choices=("letterbox", "direct_stretch"), default="letterbox")
     args = parser.parse_args()
     blockers: list[str] = []
     warnings: list[str] = []
@@ -45,8 +46,20 @@ def main() -> int:
     if tuple(picodet["classes"]) != tuple(SURFACE_CATEGORY_IDS.values()):
         blockers.append("PicoDet must use palm/back/side in the fixed class order")
     train_pipeline = nanodet["data"]["train"]["pipeline"]
-    if not train_pipeline.get("palm_letterbox") or nanodet["data"]["val"]["pipeline"].get("palm_letterbox") is not True:
+    letterbox_enabled = train_pipeline.get("palm_letterbox") is True and nanodet["data"]["val"]["pipeline"].get("palm_letterbox") is True
+    if args.geometry == "letterbox" and not letterbox_enabled:
         blockers.append("NanoDet surface model must use LetterBox for both train and validation")
+    if args.geometry == "direct_stretch":
+        if letterbox_enabled or train_pipeline.get("palm_letterbox") or nanodet["data"]["val"]["pipeline"].get("palm_letterbox"):
+            blockers.append("direct-stretch NanoDet must disable LetterBox for both train and validation")
+        if nanodet["data"]["train"].get("keep_ratio") or nanodet["data"]["val"].get("keep_ratio"):
+            blockers.append("direct-stretch NanoDet must set keep_ratio=false")
+        if train_pipeline.get("stretch") != [[1.0, 1.0], [1.0, 1.0]]:
+            blockers.append("primary direct-stretch comparison must not add random anisotropic stretch")
+        if picodet.get("preprocessing", {}).get("mode") != "direct_stretch":
+            blockers.append("direct-stretch PicoDet matrix must declare direct_stretch preprocessing")
+        if picodet.get("preprocessing", {}).get("random_anisotropic_stretch") is not False:
+            blockers.append("primary direct-stretch PicoDet comparison must not add random anisotropic stretch")
     if train_pipeline.get("swap_handedness_on_flip"):
         blockers.append("surface-class horizontal flip must not exchange class IDs")
     if train_pipeline.get("flip") != 0.5:

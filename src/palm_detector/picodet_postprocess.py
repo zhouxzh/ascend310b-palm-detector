@@ -16,6 +16,32 @@ PICODET_REG_MAX = 7
 PICODET_CELL_OFFSET = 0.5
 
 
+def preprocess_picodet_bgr(
+    image: np.ndarray,
+    *,
+    input_size: tuple[int, int],
+    mean_rgb: np.ndarray | Sequence[float] = PICODET_MEAN_RGB,
+    std_rgb: np.ndarray | Sequence[float] = PICODET_STD_RGB,
+    interpolation: int = 2,
+) -> np.ndarray:
+    """Create the PicoDet direct-stretch RGB / 255 / ImageNet-normalized input."""
+    if image.ndim != 3 or image.shape[2] != 3:
+        raise ValueError("expected an HWC BGR image with three channels")
+    mean = np.asarray(mean_rgb, dtype=np.float32)
+    std = np.asarray(std_rgb, dtype=np.float32)
+    if mean.shape != (3,) or std.shape != (3,) or not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)) or np.any(std <= 0):
+        raise ValueError("mean and std must be finite RGB triplets with positive std")
+    try:
+        import cv2
+    except ImportError as exc:
+        raise RuntimeError("OpenCV is required for PicoDet preprocessing") from exc
+    height, width = input_size
+    resized = cv2.resize(image, (width, height), interpolation=interpolation)
+    rgb = resized[:, :, ::-1].astype(np.float32) / 255.0
+    normalized = (rgb - mean) / std
+    return normalized.transpose(2, 0, 1)[None, ...]
+
+
 def preprocess_picodet_bgr_letterbox(
     image: np.ndarray,
     *,
@@ -131,6 +157,8 @@ def decode_picodet(
             candidates = np.flatnonzero(batch_scores[:, label] >= score_threshold)
             if not candidates.size:
                 continue
+            ranked = candidates[np.argsort(-batch_scores[candidates, label], kind="stable")]
+            candidates = ranked[:1000]
             kept = candidates[nms(batch_boxes[candidates], batch_scores[candidates, label], nms_iou_threshold)]
             detections.extend(
                 Detection(tuple(float(value) for value in batch_boxes[index]), float(batch_scores[index, label]), label, class_names)

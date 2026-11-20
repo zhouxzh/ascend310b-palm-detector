@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 
 from palm_detector.letterbox import compute_letterbox_transform
-from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr_letterbox
+from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr, preprocess_picodet_bgr_letterbox
 
 
 def _dfl(locations: int, *, selected: int, distance_bin: int, reg_max: int = 7) -> np.ndarray:
@@ -17,6 +17,15 @@ def _dfl(locations: int, *, selected: int, distance_bin: int, reg_max: int = 7) 
 
 
 class PicoDetPostprocessTest(unittest.TestCase):
+    def test_direct_stretch_preprocess_converts_bgr_to_rgb_and_resizes(self) -> None:
+        image = np.array([[[0, 0, 255], [0, 255, 0]]], dtype=np.uint8)
+        tensor = preprocess_picodet_bgr(
+            image, input_size=(2, 4), mean_rgb=(0.0, 0.0, 0.0), std_rgb=(1.0, 1.0, 1.0), interpolation=0
+        )
+        self.assertEqual(tensor.shape, (1, 3, 2, 4))
+        np.testing.assert_allclose(tensor[0, :, 0, 0], [1.0, 0.0, 0.0])
+        np.testing.assert_allclose(tensor[0, :, 0, -1], [0.0, 1.0, 0.0])
+
     def test_preprocess_converts_bgr_to_rgb_before_imagenet_normalization(self) -> None:
         image = np.array([[[0, 0, 255]]], dtype=np.uint8)
         tensor, transform = preprocess_picodet_bgr_letterbox(
