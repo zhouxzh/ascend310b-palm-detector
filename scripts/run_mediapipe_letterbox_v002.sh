@@ -9,6 +9,10 @@ readonly PICODET_ROOT="$ROOT/artifacts/picodet-v002"
 readonly PICODET_INVENTORY="$PICODET_ROOT/variant-inventory.json"
 readonly PICODET_STATE="$PICODET_ROOT/sweep-state.json"
 readonly PICODET_RUNS="$PICODET_ROOT/runs"
+readonly PICODET_RUN_ID="picodet-v002-picodet-s-320-seed-42"
+readonly PICODET_RUN_DIR="$PICODET_RUNS/$PICODET_RUN_ID"
+readonly HANDED_DATASET="$ROOT/data/portable-hagridv2-mediapipe-hand/coco-handed-v001"
+readonly HANDED_TEST_ANNOTATIONS="$HANDED_DATASET/annotations/instances_test.json"
 
 cd "$ROOT"
 conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
@@ -39,6 +43,40 @@ if [[ ! -f "$NANODET_RUN_DIR/training-summary.json" ]]; then
     env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/train_nanodet_sweep.py "$NANODET_RUN_DIR/config.yml" --seed 42 "${resume[@]}" |& tee -a "$NANODET_RUN_DIR/train.log"
 fi
 
-conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
-  env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/run_picodet_sweep.py \
-  --inventory "$PICODET_INVENTORY" --state "$PICODET_STATE" --runs-root "$PICODET_RUNS" --run-prefix picodet-v002 --seed 42
+run_picodet_training() {
+  local attempt
+  for attempt in 1 2; do
+    if conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+      env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/run_picodet_sweep.py \
+      --inventory "$PICODET_INVENTORY" --state "$PICODET_STATE" --runs-root "$PICODET_RUNS" --run-prefix picodet-v002 --seed 42; then
+      return 0
+    fi
+    if [[ -f "$PICODET_RUN_DIR/training-summary.json" ]]; then
+      return 0
+    fi
+    if (( attempt == 2 )); then
+      return 1
+    fi
+    printf 'PicoDet v002 training exited before reaching a terminal summary; resuming its newest complete checkpoint.\n' >&2
+  done
+}
+
+run_picodet_training
+
+if [[ ! -f "$PICODET_RUN_DIR/picodet-onnx-check.json" ]]; then
+  conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/export_picodet_onnx.py \
+    --run-dir "$PICODET_RUN_DIR" --upstream third_party/PaddleDetection --samples 20
+fi
+if [[ ! -f "$PICODET_RUN_DIR/test-eval/coco-metrics.json" ]]; then
+  conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/evaluate_picodet.py \
+    --run-dir "$PICODET_RUN_DIR" --annotations "$HANDED_TEST_ANNOTATIONS" --output-dir "$PICODET_RUN_DIR/test-eval" --upstream third_party/PaddleDetection
+  PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/evaluate_coco_metrics.py \
+    --ground-truth "$HANDED_TEST_ANNOTATIONS" --predictions "$PICODET_RUN_DIR/test-eval/bbox.json" --output "$PICODET_RUN_DIR/test-eval/coco-metrics.json"
+fi
+if [[ ! -f "$PICODET_RUN_DIR/picodet-onnx-decoder-check.json" ]]; then
+  PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/compare_picodet_onnx.py \
+    --run-dir "$PICODET_RUN_DIR" --annotations "$HANDED_TEST_ANNOTATIONS" --images-root "$HANDED_DATASET/images" \
+    --output "$PICODET_RUN_DIR/picodet-onnx-decoder-check.json"
+fi

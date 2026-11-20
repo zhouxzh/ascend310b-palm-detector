@@ -18,8 +18,8 @@ while true; do
     ((hot+=1))
     printf 'WARNING: MediaPipe LetterBox v002 GPU temperature %sC >= %sC (%s/3).\n' "$temp" "$MAX_TEMP" "$hot" >&2
     if (( hot >= 3 )); then
-      pgrep -f '[t]rain_nanodet_sweep.py' | xargs -r kill -TERM
-      pgrep -f '[t]rain_picodet.py' | xargs -r kill -TERM
+      pgrep -f '[t]rain_nanodet_sweep.py.*mediapipe-letterbox-v002' | xargs -r kill -TERM
+      pgrep -f '[t]rain_picodet.py.*picodet-v002' | xargs -r kill -TERM
       pgrep -f '[r]un_mediapipe_letterbox_v002.sh' | xargs -r kill -TERM
       break
     fi

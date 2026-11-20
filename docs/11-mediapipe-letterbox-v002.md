@@ -52,6 +52,11 @@ The runner creates an independent NanoDet run under `artifacts/runs/` and an
 independent PicoDet v002 run under `artifacts/picodet-v002/runs/`. It does not
 overwrite v001 models, metrics, or ONNX files. The PicoDet run starts only
 after the NanoDet run has reached its configured early-stop or epoch limit.
+It then exports a static ONNX model, validates 20 Paddle/ONNX raw tensors,
+evaluates the frozen left/right test split, and compares decoded ONNX and
+native Paddle detections on 20 test images. A one-time checkpoint resume is
+attempted only if a transient CUDA failure occurs before a terminal training
+summary is written.
 
 Use `scripts/monitor_mediapipe_letterbox_v002_gpu.sh` to record GPU state and
 stop the complete v002 controller after three consecutive samples at or above
