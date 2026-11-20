@@ -92,6 +92,27 @@ hyperparameter selection. At runtime, only a high-confidence `palm` result is
 eligible for palmprint recognition; every other class or uncertain result is
 rejected as `unknown` by the calling application.
 
+## 320 Resolution Ablation
+
+The repository retains older 320-square NanoDet and PicoDet artifacts, but
+they use the prior `left_palm`/`right_palm` label contract and a different
+dataset version. Their scores must not be compared with the formal surface3
+results above.
+
+`scripts/run_surface3_320_v004.sh` instead performs the valid resolution
+comparison. It trains 320-square counterparts for all completed 416 finalists:
+NanoDet-Plus-m, NanoDet-Plus-m1.5, PicoDet-L, and PicoDet-M. Each counterpart
+uses the same manually confirmed `palm`/`back`/`side` labels, subject-disjoint
+splits, seed, LetterBox policy, augmentations, optimizer hyperparameters,
+effective batch, checkpoint rule, early-stop rule, and test evaluator as its
+416 peer. Input resolution is the only intentional changed variable.
+
+PicoDet-L retains batch 24 and one-GPU LR 0.03; PicoDet-M retains batch 48 and
+one-GPU LR 0.015. This deliberately forgoes a larger 320 batch, since changing
+it would confound a resolution comparison. The controller exports and validates
+each static 320 ONNX artifact before its frozen test metrics enter the combined
+comparison table.
+
 ## Launch
 
 ```bash

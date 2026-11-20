@@ -29,10 +29,17 @@ def _counts(payload: dict) -> dict[str, int]:
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--nanodet-config", type=Path, default=NANODET_CONFIG)
+    parser.add_argument("--picodet-matrix", type=Path, default=PICODET_MATRIX)
+    parser.add_argument("--expected-input-size", type=int)
+    args = parser.parse_args()
     blockers: list[str] = []
     warnings: list[str] = []
-    nanodet = yaml.safe_load(NANODET_CONFIG.read_text(encoding="utf-8"))
-    picodet = yaml.safe_load(PICODET_MATRIX.read_text(encoding="utf-8"))
+    nanodet = yaml.safe_load(args.nanodet_config.read_text(encoding="utf-8"))
+    picodet = yaml.safe_load(args.picodet_matrix.read_text(encoding="utf-8"))
     if tuple(nanodet["class_names"]) != tuple(SURFACE_CATEGORY_IDS.values()):
         blockers.append("NanoDet must use palm/back/side in the fixed class order")
     if tuple(picodet["classes"]) != tuple(SURFACE_CATEGORY_IDS.values()):
@@ -44,6 +51,13 @@ def main() -> int:
         blockers.append("surface-class horizontal flip must not exchange class IDs")
     if train_pipeline.get("flip") != 0.5:
         blockers.append("NanoDet surface model must use 0.5 label-preserving flip")
+    if args.expected_input_size is not None:
+        expected = [args.expected_input_size, args.expected_input_size]
+        if nanodet["data"]["train"]["input_size"] != expected or nanodet["data"]["val"]["input_size"] != expected:
+            blockers.append(f"NanoDet input must be {expected} for this comparison")
+        sizes = [int(item["input_size"]) for item in picodet.get("variants", [])]
+        if not sizes or any(size != args.expected_input_size for size in sizes):
+            blockers.append(f"all PicoDet variants must use {args.expected_input_size} input for this comparison")
     manifest_path = DATASET / "surface3-manifest.json"
     if not manifest_path.is_file():
         blockers.append("surface3 dataset has not been materialized")
@@ -84,6 +98,8 @@ def main() -> int:
         blockers.append("PyTorch CUDA is unavailable")
     print(json.dumps({
         "ready": not blockers,
+        "nanodet_config": str(args.nanodet_config),
+        "picodet_matrix": str(args.picodet_matrix),
         "dataset_manifest_sha256": sha256_file(manifest_path) if manifest_path.is_file() else None,
         "class_counts": reports,
         "warnings": warnings,

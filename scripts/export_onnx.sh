@@ -11,9 +11,9 @@ readonly CHECKPOINT="$RUN_DIR/model_best/model_best.ckpt"
 readonly ONNX_REPORT="$RUN_DIR/onnx-check.json"
 [[ -f "$RUN_DIR/config.yml" && -f "$CHECKPOINT" ]] || { echo "Missing run config or best checkpoint" >&2; exit 2; }
 cd "$ROOT"
-MODEL_DETAILS="$(conda run --no-capture-output -n palm-nanodet python -c 'import sys,yaml; c=yaml.safe_load(open(sys.argv[1], encoding="utf-8")); a=c["model"]["arch"]; print(a["name"], *c["data"]["val"]["input_size"], a["backbone"].get("model_size", "none"))' "$RUN_DIR/config.yml")"
-read -r ARCH INPUT_WIDTH INPUT_HEIGHT MODEL_SIZE <<< "$MODEL_DETAILS"
-if [[ "$ARCH" == "NanoDetPlus" && "$MODEL_SIZE" == "1.0x" && "$INPUT_WIDTH" == "320" && "$INPUT_HEIGHT" == "320" ]]; then
+MODEL_DETAILS="$(conda run --no-capture-output -n palm-nanodet python -c 'import sys,yaml; c=yaml.safe_load(open(sys.argv[1], encoding="utf-8")); a=c["model"]["arch"]; print(a["name"], *c["data"]["val"]["input_size"], a["backbone"].get("model_size", "none"), a["head"]["num_classes"])' "$RUN_DIR/config.yml")"
+read -r ARCH INPUT_WIDTH INPUT_HEIGHT MODEL_SIZE NUM_CLASSES <<< "$MODEL_DETAILS"
+if [[ "$ARCH" == "NanoDetPlus" && "$MODEL_SIZE" == "1.0x" && "$NUM_CLASSES" == "2" && "$INPUT_WIDTH" == "320" && "$INPUT_HEIGHT" == "320" ]]; then
   readonly ONNX_PATH="$RUN_DIR/nanodet-plus-m-320-palm.onnx"
 else
   readonly ONNX_PATH="$RUN_DIR/model-${INPUT_WIDTH}x${INPUT_HEIGHT}.onnx"
