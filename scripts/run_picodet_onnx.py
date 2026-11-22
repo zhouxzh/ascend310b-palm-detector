@@ -62,7 +62,12 @@ def main() -> int:
         direct_stretch = True
     else:
         raise ValueError(f"unsupported PicoDet preprocessing geometry: {geometry}")
-    session = ort.InferenceSession(str(run_dir / f"picodet-{target_size[1]}x{target_size[0]}.onnx"), providers=["CPUExecutionProvider"])
+    model_path = run_dir / f"picodet-{target_size[1]}x{target_size[0]}.onnx"
+    if not model_path.is_file():
+        model_path = run_dir / "model.onnx"
+    if not model_path.is_file():
+        raise FileNotFoundError("PicoDet ONNX model is missing")
+    session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
     outputs = session.run(None, {session.get_inputs()[0].name: tensor})
     detections = decode_picodet(
         outputs,
@@ -77,7 +82,7 @@ def main() -> int:
         detections = _unscale_direct_detections(detections, image.shape[:2], target_size)
     payload = {
         "image": str(args.image.resolve()),
-        "model": str(run_dir / f"picodet-{target_size[1]}x{target_size[0]}.onnx"),
+        "model": str(model_path),
         "classes": list(classes),
         "detections": detections_to_json(detections),
     }

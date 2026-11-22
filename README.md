@@ -15,8 +15,17 @@ anatomical left or right hand.
 
 ## Released Model
 
-The formal release candidate is NanoDet-Plus-m with a static `416x416` ONNX
-input and centered zero-padded LetterBox preprocessing:
+The released models are NanoDet-Plus-m and PicoDet-L / LCNet x2.0. Both use
+the same human-confirmed data, static `416x416` ONNX input, and centered
+zero-padded LetterBox geometry. They differ in runtime contract and
+normalization, so each must use its matching host decoder.
+
+| Model | ONNX input | Frozen test mAP50-95 | Frozen test AP50 | Role |
+| --- | --- | ---: | ---: | --- |
+| NanoDet-Plus-m | `data`, `1x3x416x416` | **0.5321** | **0.8317** | Primary model |
+| PicoDet-L / LCNet x2.0 | `image`, `1x3x416x416` | 0.5153 | 0.8274 | Formal alternative |
+
+NanoDet-Plus-m has the stronger frozen test result:
 
 ```text
 data: float32 [1, 3, 416, 416]
@@ -24,9 +33,8 @@ output: float32 [1, 3598, 35]
 classes: palm, back, side
 ```
 
-Its frozen subject-disjoint test result is mAP50-95 `0.5321` and AP50
-`0.8317`. The exact artifact, hash, preprocessing contract, and ONNX checks
-are recorded in [docs/12-surface3-training-v003.md](docs/12-surface3-training-v003.md).
+The exact artifacts, hashes, preprocessing contracts, and ONNX checks are
+recorded in [docs/12-surface3-training-v003.md](docs/12-surface3-training-v003.md).
 
 ## Geometry Results
 
