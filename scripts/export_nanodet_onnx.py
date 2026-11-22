@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import onnx
@@ -12,6 +13,31 @@ import torch
 
 from nanodet.model.arch import build_model
 from nanodet.util import Logger, cfg, load_config, load_model_weight
+
+
+def _export(model, dummy: torch.Tensor, output: Path, opset_version: int) -> None:
+    torch.onnx.export(
+        model,
+        dummy,
+        str(output),
+        verbose=False,
+        keep_initializers_as_inputs=True,
+        opset_version=opset_version,
+        input_names=["data"],
+        output_names=["output"],
+    )
+
+
+def export_with_compatible_opset(model, dummy: torch.Tensor, output: Path) -> int:
+    """Keep the deployment-friendly opset 11 unless a backbone requires 13."""
+    try:
+        _export(model, dummy, output, opset_version=11)
+        return 11
+    except torch.onnx.errors.UnsupportedOperatorError as exc:
+        if "aten::unflatten" not in str(exc):
+            raise
+        _export(model, dummy, output, opset_version=13)
+        return 13
 
 
 def main() -> int:
@@ -29,20 +55,13 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     load_model_weight(model, checkpoint, Logger(-1, str(args.output.parent), False))
     dummy = torch.randn(1, 3, input_height, input_width)
-    torch.onnx.export(
-        model,
-        dummy,
-        str(args.output),
-        verbose=False,
-        keep_initializers_as_inputs=True,
-        opset_version=11,
-        input_names=["data"],
-        output_names=["output"],
-    )
+    opset_version = export_with_compatible_opset(model, dummy, args.output)
     simplified, success = onnxsim.simplify(str(args.output), input_data={"data": dummy.numpy()})
     if not success:
         raise RuntimeError("ONNX simplification failed")
     onnx.save(simplified, str(args.output))
+    manifest = args.output.with_suffix(".export.json")
+    manifest.write_text(json.dumps({"opset_version": opset_version}, indent=2) + "\n", encoding="utf-8")
     print(args.output)
     return 0
 

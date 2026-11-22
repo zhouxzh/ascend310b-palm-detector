@@ -43,8 +43,10 @@ quality, and performance are distinct gates. A candidate is not "adapted to
 
 The local exporter `scripts/export_nanodet_onnx.py` mirrors the pinned upstream
 export contract while avoiding a modification to its checkout. It disables only
-the upstream tool's verbose graph print; it keeps opset 11, fixed shape, the
+the upstream tool's verbose graph print; it prefers opset 11, uses opset 13
+only when a backbone needs `aten::unflatten`, and preserves fixed shape, the
 same input/output names, graph simplification, and host-side postprocessing.
+The actual opset is recorded in `onnx-check.json` for each model.
 
 The target board operator must supply the actual `--soc_version`; this project
 intentionally does not guess it from the training server.

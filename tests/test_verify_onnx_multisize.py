@@ -51,6 +51,7 @@ class VerifyOnnxMultisizeTest(unittest.TestCase):
                         self.assertEqual(module.main(), 0)
                     report = json.loads(report_path.read_text())
                     self.assertTrue(report["valid"])
+                    self.assertEqual(report["opset_version"], 11)
                     self.assertEqual(report["outputs"], [{"name": "output", "shape": [1, priors, channels]}])
                     self.assertEqual(report["strides"], list(strides))
                     self.assertEqual(report["reg_max"], reg_max)

@@ -17,6 +17,11 @@ def _shape(value) -> list[int | str]:
     return [dimension.dim_value if dimension.HasField("dim_value") else dimension.dim_param for dimension in value.type.tensor_type.shape.dim]
 
 
+def _opset_version(model) -> int | None:
+    imports = [item.version for item in model.opset_import if item.domain in {"", "ai.onnx"}]
+    return max(imports, default=None)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--onnx", type=Path, required=True)
@@ -54,7 +59,7 @@ def main() -> int:
     expected_output = [1, num_priors, num_classes + 4 * (reg_max + 1)]
     if outputs != [{"name": "output", "shape": expected_output}]:
         errors.append(f"expected raw output output {expected_output}, got {outputs}")
-    report = {"valid": not errors, "onnx": str(args.onnx), "sha256": sha256_file(args.onnx), "num_classes": num_classes, "input_size": [width, height], "strides": list(strides), "reg_max": reg_max, "inputs": inputs, "outputs": outputs, "errors": errors}
+    report = {"valid": not errors, "onnx": str(args.onnx), "sha256": sha256_file(args.onnx), "opset_version": _opset_version(model), "num_classes": num_classes, "input_size": [width, height], "strides": list(strides), "reg_max": reg_max, "inputs": inputs, "outputs": outputs, "errors": errors}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {args.output}: {'PASS' if report['valid'] else 'FAIL'}")
