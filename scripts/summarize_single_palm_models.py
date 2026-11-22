@@ -12,15 +12,80 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def median(values: list[float]) -> float | None:
+    """Return the median without bringing a numerical dependency into reporting."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def geometry_aggregate(completed: list[dict], paired_geometry: list[dict]) -> list[dict]:
+    """Summarize mAP by framework and preprocessing with only completed pairs."""
+    summaries: list[dict] = []
+    for framework in ("NanoDet", "PicoDet"):
+        for geometry in ("letterbox", "direct_stretch"):
+            results = [
+                result for result in completed
+                if result["framework"] == framework and result["geometry"] == geometry
+            ]
+            maps = [float(result["test"]["mAP50_95"]) for result in results]
+            best = max(results, key=lambda result: float(result["test"]["mAP50_95"]), default=None)
+            summaries.append({
+                "framework": framework,
+                "geometry": geometry,
+                "completed_count": len(results),
+                "mean_map50_95": sum(maps) / len(maps) if maps else None,
+                "median_map50_95": median(maps),
+                "best_variant": best["variant"] if best else None,
+                "best_map50_95": float(best["test"]["mAP50_95"]) if best else None,
+            })
+
+        pairs = [
+            item for item in paired_geometry
+            if item["framework"] == framework
+            and item["letterbox_map"] is not None
+            and item["direct_stretch_map"] is not None
+        ]
+        deltas = [float(item["letterbox_map"] - item["direct_stretch_map"]) for item in pairs]
+        letterbox_wins = sum(delta > 0 for delta in deltas)
+        stretch_wins = sum(delta < 0 for delta in deltas)
+        if letterbox_wins > stretch_wins:
+            preferred = "LetterBox"
+        elif stretch_wins > letterbox_wins:
+            preferred = "Direct stretch"
+        else:
+            preferred = "Tie"
+        summaries.append({
+            "framework": framework,
+            "geometry": "paired",
+            "completed_count": len(pairs),
+            "mean_letterbox_minus_stretch": sum(deltas) / len(deltas) if deltas else None,
+            "median_letterbox_minus_stretch": median(deltas),
+            "letterbox_wins": letterbox_wins,
+            "direct_stretch_wins": stretch_wins,
+            "ties": len(deltas) - letterbox_wins - stretch_wins,
+            "preferred_geometry": preferred,
+        })
+    return summaries
+
+
 def nanodet_result(run_dir: Path) -> dict | None:
     summary = run_dir / "training-summary.json"
     report = run_dir / "onnx-check.json"
+    comparison = run_dir / "onnx-comparison.json"
     metrics = run_dir / "evaluations/test/coco-metrics.json"
-    if not all(path.is_file() for path in (summary, report, metrics)):
+    if not all(path.is_file() for path in (summary, report, comparison, metrics)):
         return None
     training = read_json(summary)
     onnx = read_json(report)
+    onnx_comparison = read_json(comparison)
     test = read_json(metrics)
+    if not onnx.get("valid") or not onnx_comparison.get("valid"):
+        return None
     geometry = "letterbox" if "-letterbox-" in run_dir.name else "direct_stretch"
     return {
         "framework": "NanoDet",
@@ -37,12 +102,16 @@ def nanodet_result(run_dir: Path) -> dict | None:
 def picodet_result(run_dir: Path) -> dict | None:
     summary = run_dir / "training-summary.json"
     report = run_dir / "picodet-onnx-check.json"
+    comparison = run_dir / "picodet-onnx-decoder-check.json"
     metrics = run_dir / "test-eval/coco-metrics.json"
-    if not all(path.is_file() for path in (summary, report, metrics)):
+    if not all(path.is_file() for path in (summary, report, comparison, metrics)):
         return None
     training = read_json(summary)
     onnx = read_json(report)
+    onnx_comparison = read_json(comparison)
     test = read_json(metrics)
+    if not onnx.get("valid") or not onnx_comparison.get("valid"):
+        return None
     geometry = "letterbox" if "-letterbox-" in run_dir.name else "direct_stretch"
     return {
         "framework": "PicoDet",
@@ -93,6 +162,40 @@ def markdown(report: dict) -> str:
         lines.append(
             f"| {item['framework']} | {item['variant']} | {item['letterbox_map']:.4f} | "
             f"{item['direct_stretch_map']:.4f} | {delta:+.4f} | {better} |"
+        )
+    lines.extend([
+        "",
+        "## Aggregate mAP Comparison",
+        "",
+        "| Framework | Geometry | Completed | Mean mAP50-95 | Median mAP50-95 | Best variant | Best mAP50-95 |",
+        "| --- | --- | ---: | ---: | ---: | --- | ---: |",
+    ])
+    for item in report["geometry_aggregate"]:
+        if item["geometry"] == "paired":
+            continue
+        mean = item["mean_map50_95"]
+        median_map = item["median_map50_95"]
+        best_map = item["best_map50_95"]
+        lines.append(
+            f"| {item['framework']} | {item['geometry']} | {item['completed_count']} | "
+            f"{mean:.4f} | {median_map:.4f} | {item['best_variant']} | {best_map:.4f} |"
+            if mean is not None else
+            f"| {item['framework']} | {item['geometry']} | 0 | pending | pending | pending | pending |"
+        )
+    lines.extend([
+        "",
+        "| Framework | Fully evaluated pairs | LetterBox wins | Direct-stretch wins | Ties | Mean LetterBox minus stretch | Preferred geometry |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
+    ])
+    for item in report["geometry_aggregate"]:
+        if item["geometry"] != "paired":
+            continue
+        mean_delta = item["mean_letterbox_minus_stretch"]
+        lines.append(
+            f"| {item['framework']} | {item['completed_count']} | {item['letterbox_wins']} | "
+            f"{item['direct_stretch_wins']} | {item['ties']} | {mean_delta:+.4f} | {item['preferred_geometry']} |"
+            if mean_delta is not None else
+            f"| {item['framework']} | 0 | 0 | 0 | 0 | pending | pending |"
         )
     lines.extend([
         "",
@@ -155,6 +258,7 @@ def main() -> int:
         "completed": completed,
         "pending_or_failed": pending_or_failed,
         "paired_geometry": paired_geometry,
+        "geometry_aggregate": geometry_aggregate(completed, paired_geometry),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

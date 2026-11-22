@@ -27,6 +27,7 @@ class SummarizeSinglePalmModelsTest(unittest.TestCase):
                 run.mkdir(parents=True)
                 (run / "training-summary.json").write_text(json.dumps({"status": "early_stopped", "best_dev_map": 0.5, "early_stop": {"bad_checks": 8}}), encoding="utf-8")
                 (run / "onnx-check.json").write_text(json.dumps({"valid": True, "onnx": "model.onnx", "sha256": "x"}), encoding="utf-8")
+                (run / "onnx-comparison.json").write_text(json.dumps({"valid": True}), encoding="utf-8")
                 test = run / "evaluations" / "test"
                 test.mkdir(parents=True)
                 (test / "coco-metrics.json").write_text(json.dumps({"metrics": {"mAP50_95": 0.6 if geometry == "letterbox" else 0.5, "AP50": 0.9}, "per_class": {"palm_surface": {}}, "ground_truth": {}}), encoding="utf-8")
@@ -38,3 +39,8 @@ class SummarizeSinglePalmModelsTest(unittest.TestCase):
         self.assertEqual(report["complete_task_count"], 2)
         self.assertEqual(report["paired_geometry"][0]["letterbox_map"], 0.6)
         self.assertEqual(report["paired_geometry"][0]["direct_stretch_map"], 0.5)
+        aggregate = {(item["framework"], item["geometry"]): item for item in report["geometry_aggregate"]}
+        self.assertEqual(aggregate[("NanoDet", "letterbox")]["mean_map50_95"], 0.6)
+        self.assertEqual(aggregate[("NanoDet", "direct_stretch")]["median_map50_95"], 0.5)
+        self.assertEqual(aggregate[("NanoDet", "paired")]["letterbox_wins"], 1)
+        self.assertEqual(aggregate[("NanoDet", "paired")]["preferred_geometry"], "LetterBox")

@@ -32,4 +32,7 @@ nohup ./scripts/run_single_palm_all_variants.sh \
 
 The controller writes status to `artifacts/single-palm-v001/training-state.json`
 and the final rank-ordered comparison to `final-comparison.json` and
-`final-comparison.md`.
+`final-comparison.md`. In addition to every model's frozen-test mAP, the report
+contains matched LetterBox-versus-direct-stretch deltas and per-framework mean,
+median, best-result, and geometry win/loss aggregates. Only completed matched
+pairs contribute to a geometry conclusion.
