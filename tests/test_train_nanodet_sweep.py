@@ -16,11 +16,16 @@ class TrainNanoDetSweepTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory() as temporary:
-            log = Path(temporary) / "train.log"
-            log.write_text(
+            root = Path(temporary)
+            manual_log = root / "manual-controller.log"
+            train_log = root / "train.log"
+            manual_log.write_text(
                 "[NanoDet]INFO:Val_metrics: {'mAP': np.float64(0.55)}\n"
-                "[NanoDet]INFO:Val_metrics: {'mAP': 0.60}\n"
+                "[NanoDet]INFO:Val_metrics: {'mAP': 0.60}\n",
+                encoding="utf-8",
+            )
+            train_log.write_text(
                 "[NanoDet]INFO:Val_metrics: {'mAP': 0.59}\n",
                 encoding="utf-8",
             )
-            self.assertEqual(module._historical_bad_checks(log, 0.60, 0.001), 1)
+            self.assertEqual(module._historical_bad_checks((manual_log, train_log), 0.60, 0.001), 1)

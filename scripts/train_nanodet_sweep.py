@@ -62,10 +62,15 @@ def _best_completed_metric(save_dir: Path) -> float:
     return max(values, default=float("-inf"))
 
 
-def _historical_bad_checks(train_log: Path, best_metric: float, min_delta: float) -> int:
-    if not train_log.is_file() or best_metric == float("-inf"):
+def _historical_bad_checks(train_logs: tuple[Path, ...], best_metric: float, min_delta: float) -> int:
+    if best_metric == float("-inf"):
         return 0
-    values = [float(match.group(1)) for match in METRIC_PATTERN.finditer(train_log.read_text(encoding="utf-8", errors="replace"))]
+    text = "\n".join(
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in train_logs
+        if path.is_file()
+    )
+    values = [float(match.group(1)) for match in METRIC_PATTERN.finditer(text)]
     bad_checks = 0
     for value in reversed(values):
         # Do not count the validation that established the retained best
@@ -190,7 +195,11 @@ def main() -> int:
     resume = str(resume_path) if args.resume else None
     early_stopping = SweepEarlyStopping(
         initial_best=task.save_flag,
-        initial_bad_checks=_historical_bad_checks(save_dir / "train.log", task.save_flag, args.early_stop_min_delta),
+        initial_bad_checks=_historical_bad_checks(
+            (save_dir / "manual-controller.log", save_dir / "train.log"),
+            task.save_flag,
+            args.early_stop_min_delta,
+        ),
         patience=args.early_stop_patience,
         min_delta=args.early_stop_min_delta,
     )
