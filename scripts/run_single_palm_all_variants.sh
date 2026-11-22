@@ -59,33 +59,52 @@ run_nanodet() {
   dimensions="$(PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python -c 'import sys,yaml; c=yaml.safe_load(open(sys.argv[1], encoding="utf-8")); print(*c["data"]["val"]["input_size"])' "$config")"
   local width height
   read -r width height <<< "$dimensions"
-  PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/check_single_palm_training_readiness.py \
-    --config "$config" --geometry "$geometry"
+  if ! PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/check_single_palm_training_readiness.py \
+    --config "$config" --geometry "$geometry"; then
+    record_state nanodet "$geometry" "$variant" failed "$run_dir" "readiness check failed"
+    return 1
+  fi
   record_state nanodet "$geometry" "$variant" running "$run_dir"
   if [[ ! -d "$run_dir" ]]; then
-    PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/create_run.py \
+    if ! PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/create_run.py \
       --base-config "$config" --run-id "$run_id" --runs-root "$NANO_RUNS" \
-      --pretrained-checkpoint "$checkpoint" --pretrained-manifest "$manifest" --data-report "$DATA_AUDIT" --seed 42
+      --pretrained-checkpoint "$checkpoint" --pretrained-manifest "$manifest" --data-report "$DATA_AUDIT" --seed 42; then
+      record_state nanodet "$geometry" "$variant" failed "$run_dir" "run creation failed"
+      return 1
+    fi
   fi
   if [[ ! -f "$run_dir/training-summary.json" ]]; then
     local resume=()
     [[ -f "$run_dir/model_last.ckpt" ]] && resume+=(--resume)
-    conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
       env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/train_nanodet_sweep.py "$run_dir/config.yml" --seed 42 "${resume[@]}" |& tee -a "$run_dir/train.log"
+    then
+      record_state nanodet "$geometry" "$variant" failed "$run_dir" "training failed"
+      return 1
+    fi
   fi
   if [[ ! -f "$run_dir/onnx-check.json" ]]; then
-    ./scripts/export_onnx.sh "$run_dir"
+    if ! ./scripts/export_onnx.sh "$run_dir"; then
+      record_state nanodet "$geometry" "$variant" failed "$run_dir" "ONNX export failed"
+      return 1
+    fi
   fi
   if [[ ! -f "$run_dir/onnx-comparison.json" ]]; then
-    conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
       env PYTHONPATH="$ROOT/src:$ROOT/third_party/nanodet" python scripts/compare_onnx.py \
       --config "$run_dir/config.yml" --checkpoint "$run_dir/model_best/model_best.ckpt" \
       --onnx "$run_dir/model-${width}x${height}.onnx" --coco-annotations "$TEST_ANNOTATIONS" \
       --images-root "$DATASET/images" --sample-count 20 --sample-manifest "$run_dir/onnx-comparison-samples.json" \
-      --output "$run_dir/onnx-comparison.json"
+      --output "$run_dir/onnx-comparison.json"; then
+      record_state nanodet "$geometry" "$variant" failed "$run_dir" "ONNX comparison failed"
+      return 1
+    fi
   fi
   if [[ ! -f "$run_dir/evaluations/test/coco-metrics.json" ]]; then
-    NANODET_TEST_ANNOTATIONS="$TEST_ANNOTATIONS" ./scripts/evaluate_nanodet.sh "$run_dir" test
+    if ! NANODET_TEST_ANNOTATIONS="$TEST_ANNOTATIONS" ./scripts/evaluate_nanodet.sh "$run_dir" test; then
+      record_state nanodet "$geometry" "$variant" failed "$run_dir" "frozen test evaluation failed"
+      return 1
+    fi
   fi
   record_state nanodet "$geometry" "$variant" complete "$run_dir"
 }
@@ -96,21 +115,33 @@ run_picodet_postprocess() {
   local run_dir="$3"
   record_state picodet "$geometry" "$variant" running "$run_dir"
   if [[ ! -f "$run_dir/picodet-onnx-check.json" ]]; then
-    conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
       env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/export_picodet_onnx.py \
-      --run-dir "$run_dir" --upstream third_party/PaddleDetection --samples 20
+      --run-dir "$run_dir" --upstream third_party/PaddleDetection --samples 20; then
+      record_state picodet "$geometry" "$variant" failed "$run_dir" "ONNX export failed"
+      return 1
+    fi
   fi
   if [[ ! -f "$run_dir/test-eval/coco-metrics.json" ]]; then
-    conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
       env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/evaluate_picodet.py \
-      --run-dir "$run_dir" --annotations "$TEST_ANNOTATIONS" --output-dir "$run_dir/test-eval" --upstream third_party/PaddleDetection
-    PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/evaluate_coco_metrics.py \
-      --ground-truth "$TEST_ANNOTATIONS" --predictions "$run_dir/test-eval/bbox.json" --output "$run_dir/test-eval/coco-metrics.json"
+      --run-dir "$run_dir" --annotations "$TEST_ANNOTATIONS" --output-dir "$run_dir/test-eval" --upstream third_party/PaddleDetection; then
+      record_state picodet "$geometry" "$variant" failed "$run_dir" "frozen test inference failed"
+      return 1
+    fi
+    if ! PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/evaluate_coco_metrics.py \
+      --ground-truth "$TEST_ANNOTATIONS" --predictions "$run_dir/test-eval/bbox.json" --output "$run_dir/test-eval/coco-metrics.json"; then
+      record_state picodet "$geometry" "$variant" failed "$run_dir" "frozen test metric calculation failed"
+      return 1
+    fi
   fi
   if [[ ! -f "$run_dir/picodet-onnx-decoder-check.json" ]]; then
-    PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/compare_picodet_onnx.py \
+    if ! PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/compare_picodet_onnx.py \
       --run-dir "$run_dir" --annotations "$TEST_ANNOTATIONS" --images-root "$DATASET/images" \
-      --output "$run_dir/picodet-onnx-decoder-check.json"
+      --output "$run_dir/picodet-onnx-decoder-check.json"; then
+      record_state picodet "$geometry" "$variant" failed "$run_dir" "ONNX decoder comparison failed"
+      return 1
+    fi
   fi
   record_state picodet "$geometry" "$variant" complete "$run_dir"
 }
@@ -128,11 +159,14 @@ run_picodet_matrix() {
   while IFS=$'\t' read -r variant size; do
     local run_dir="$PICO_RUNS/single-palm-v001-${geometry}-${variant}-seed-42"
     record_state picodet "$geometry" "$variant" queued "$run_dir"
-    conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
       env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/run_picodet_sweep.py \
       --inventory "$inventory" --state "$state" --runs-root "$PICO_RUNS" \
-      --run-prefix "single-palm-v001-${geometry}" --only "$variant" --seed 42
-    run_picodet_postprocess "$geometry" "$variant" "$run_dir"
+      --run-prefix "single-palm-v001-${geometry}" --only "$variant" --seed 42; then
+      record_state picodet "$geometry" "$variant" failed "$run_dir" "training failed"
+      continue
+    fi
+    run_picodet_postprocess "$geometry" "$variant" "$run_dir" || true
   done < <(MATRIX="$matrix" conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import os
 import yaml
@@ -162,7 +196,7 @@ for geometry in letterbox direct_stretch; do
     mv "$config_root/../variant-inventory.json" "$inventory"
   fi
   while IFS=$'\t' read -r variant config checkpoint manifest; do
-    run_nanodet "$geometry" "$variant" "$config" "$checkpoint" "$manifest"
+    run_nanodet "$geometry" "$variant" "$config" "$checkpoint" "$manifest" || true
   done < <(INVENTORY="$inventory" conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import json
 import os
