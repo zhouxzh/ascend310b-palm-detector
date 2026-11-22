@@ -218,6 +218,7 @@ data/manifests/*
 !data/manifests/*.template.json
 artifacts/
 reports/
+mem_info.core.*
 third_party/nanodet/
 third_party/PaddleDetection/
 
