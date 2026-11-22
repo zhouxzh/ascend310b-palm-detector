@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+from palm_detector.run_lock import acquire_training_lock
+
+
+class RunLockTest(unittest.TestCase):
+    def test_lock_file_is_created_and_released(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "run"
+            first = acquire_training_lock(run_dir)
+            self.assertTrue((run_dir / ".training.lock").is_file())
+            first.close()
+            second = acquire_training_lock(run_dir)
+            second.close()
+
+    def test_second_process_waits_until_lock_is_released(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "run"
+            marker = Path(temporary) / "acquired"
+            first = acquire_training_lock(run_dir)
+            environment = os.environ.copy()
+            source_root = str(Path(__file__).resolve().parents[1] / "src")
+            environment["PYTHONPATH"] = source_root + os.pathsep + environment.get("PYTHONPATH", "")
+            command = (
+                "from pathlib import Path; "
+                "from palm_detector.run_lock import acquire_training_lock; "
+                f"handle=acquire_training_lock(Path({str(run_dir)!r})); "
+                f"Path({str(marker)!r}).write_text('acquired', encoding='utf-8'); "
+                "handle.close()"
+            )
+            waiting = subprocess.Popen([sys.executable, "-c", command], env=environment)
+            time.sleep(0.1)
+            self.assertFalse(marker.exists())
+            first.close()
+            self.assertEqual(waiting.wait(timeout=5), 0)
+            self.assertTrue(marker.is_file())

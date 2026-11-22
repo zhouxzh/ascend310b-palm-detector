@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "third_party/nanodet"))
 
 from palm_detector.nanodet_extensions import install_nanodet_extensions
 from palm_detector.labels import is_supported_class_contract
+from palm_detector.run_lock import acquire_training_lock
 
 install_nanodet_extensions()
 
@@ -32,6 +33,16 @@ from nanodet.util import NanoDetLightningLogger, cfg, convert_old_model, load_co
 
 
 METRIC_PATTERN = re.compile(r"Val_metrics: .*?'mAP': np\.float64\(([^)]+)\)")
+
+
+def _completed(save_dir: Path) -> bool:
+    summary = save_dir / "training-summary.json"
+    if not summary.is_file():
+        return False
+    try:
+        return json.loads(summary.read_text(encoding="utf-8")).get("status") in {"early_stopped", "max_epochs"}
+    except json.JSONDecodeError:
+        return False
 
 
 def _best_completed_metric(save_dir: Path) -> float:
@@ -103,6 +114,11 @@ def main() -> int:
         raise ValueError("NanoDet LetterBox must be used for both train and validation")
     if cfg.device.gpu_ids != [0] or not torch.cuda.is_available():
         raise RuntimeError("the pinned sweep requires one usable CUDA GPU")
+    save_dir = Path(cfg.save_dir)
+    training_lock = acquire_training_lock(save_dir)
+    if _completed(save_dir):
+        training_lock.close()
+        return 0
     accumulation = int(cfg.device.accumulate_grad_batches)
     if accumulation < 1:
         raise ValueError("accumulate_grad_batches must be positive")
@@ -126,7 +142,6 @@ def main() -> int:
     train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, drop_last=True, **dataloader)
     val_loader = torch.utils.data.DataLoader(val_data, shuffle=False, drop_last=False, **dataloader)
     task = TrainingTask(cfg, evaluator)
-    save_dir = Path(cfg.save_dir)
     previous_best = _best_completed_metric(save_dir)
     if previous_best != float("-inf"):
         task.save_flag = previous_best

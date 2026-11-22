@@ -64,6 +64,21 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
 
+    sys.path.insert(0, str(ROOT / "src"))
+    from palm_detector.run_lock import acquire_training_lock
+
+    args.run_dir.mkdir(parents=True, exist_ok=True)
+    training_lock = acquire_training_lock(args.run_dir)
+    summary_path = args.run_dir / "training-summary.json"
+    if summary_path.is_file():
+        try:
+            status = json.loads(summary_path.read_text(encoding="utf-8")).get("status")
+        except json.JSONDecodeError:
+            status = None
+        if status in {"early_stopped", "max_epochs"}:
+            training_lock.close()
+            return 0
+
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     classes = tuple(manifest["classes"])
     from palm_detector.labels import is_supported_class_contract
@@ -82,7 +97,6 @@ def main() -> int:
     if sha256(Path(weight_record["path"])) != weight_record["sha256"] or Path(weight_record["path"]).stat().st_size != weight_record["bytes"]:
         raise ValueError("verified pretraining weight checksum or byte count changed")
 
-    sys.path.insert(0, str(ROOT / "src"))
     sys.path.insert(0, str(args.upstream))
     from palm_detector.paddledetection_extensions import install_paddledetection_extensions
 
@@ -99,10 +113,8 @@ def main() -> int:
     np.random.seed(args.seed)
     paddle.seed(args.seed)
 
-    args.run_dir.mkdir(parents=True, exist_ok=True)
     save_dir = args.run_dir / "paddle-output"
     tensorboard_dir = args.run_dir / "tensorboard"
-    summary_path = args.run_dir / "training-summary.json"
     progress_path = args.run_dir / "training-progress.json"
     copied_config = args.run_dir / "config.yml"
     if not copied_config.exists():
