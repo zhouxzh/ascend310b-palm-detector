@@ -25,3 +25,4 @@ class SinglePalmPicoDetMatrixTest(unittest.TestCase):
         self.assertEqual(identifiers[0], identifiers[1])
         self.assertIn("legacy-esnet-l-640", identifiers[0])
         self.assertIn("legacy-resnet18-640", identifiers[0])
+        self.assertTrue(all("_coco" in item["config"] for item in matrices[0]["variants"]))

@@ -4,11 +4,36 @@ import importlib.util
 import unittest
 from pathlib import Path
 
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class PrepareSinglePalmNanoDetTest(unittest.TestCase):
+    def test_matrix_covers_each_model_zoo_recipe_once_and_excludes_yolo_adapter(self) -> None:
+        matrix = yaml.safe_load((ROOT / "configs/single-palm-nanodet-v001.yml").read_text(encoding="utf-8"))
+        sources = {item["source"] for item in matrix["variants"]}
+        expected = {
+            "legacy_v0.x_configs/EfficientNet-Lite/nanodet-EfficientNet-Lite0_320.yml",
+            "legacy_v0.x_configs/EfficientNet-Lite/nanodet-EfficientNet-Lite1_416.yml",
+            "legacy_v0.x_configs/EfficientNet-Lite/nanodet-EfficientNet-Lite2_512.yml",
+            "legacy_v0.x_configs/RepVGG/nanodet-RepVGG-A0_416.yml",
+            "legacy_v0.x_configs/Transformer/nanodet-t.yml",
+            "legacy_v0.x_configs/nanodet-g.yml",
+            "legacy_v0.x_configs/nanodet-m-0.5x.yml",
+            "legacy_v0.x_configs/nanodet-m.yml",
+            "legacy_v0.x_configs/nanodet-m-1.5x.yml",
+            "legacy_v0.x_configs/nanodet-m-416.yml",
+            "legacy_v0.x_configs/nanodet-m-1.5x-416.yml",
+            "nanodet-plus-m_320.yml",
+            "nanodet-plus-m-1.5x_320.yml",
+            "nanodet-plus-m_416.yml",
+            "nanodet-plus-m-1.5x_416.yml",
+            "convnext/nanodet-plus_convnext-nano_640.yml",
+        }
+        self.assertEqual(sources, expected)
+        self.assertNotIn("nanodet-plus-m_416-yolo.yml", sources)
+
     def test_configure_updates_class_contract_and_geometry_only(self) -> None:
         path = ROOT / "scripts/prepare_single_palm_nanodet.py"
         spec = importlib.util.spec_from_file_location("prepare_single_palm_nanodet", path)

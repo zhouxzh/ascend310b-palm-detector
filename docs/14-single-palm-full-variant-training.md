@@ -18,6 +18,16 @@ and one final frozen-test evaluation:
 | NanoDet | 16 upstream configurations | LetterBox and direct stretch | 32 |
 | PicoDet | LCNet XS/S/M/L plus legacy ESNet and documented COCO backbone extensions | LetterBox and direct stretch | 46 |
 
+The NanoDet entries are the 16 independent public Model Zoo recipes in the
+pinned checkout: the five NanoDet-Plus variants, ConvNeXt-Nano, and the ten
+legacy recipes. `nanodet-plus-m_416-yolo.yml` is intentionally not an extra
+model: it has the same NanoDet-Plus-m-416 architecture and schedule as the
+COCO recipe, changing only its annotation reader to Darknet TXT. The audited
+input here is COCO and it would otherwise duplicate an experiment. PicoDet
+similarly includes independent COCO detection recipes only; VOC, NPU, pruning,
+layout/main-body, and pedestrian application files are task/export variants,
+not extra palm-detector architectures.
+
 Direct-stretch tasks use the same augmentations as LetterBox tasks except for
 geometry. Random anisotropic stretch remains disabled because direct resize
 already applies independent x/y scaling.
