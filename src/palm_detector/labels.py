@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 SURFACE_CATEGORY_IDS = {1: "palm", 2: "back", 3: "side"}
+SINGLE_PALM_CATEGORY_IDS = {1: "palm_surface"}
 CLASS_NAMES = tuple(SURFACE_CATEGORY_IDS.values())
 COCO_CATEGORY_IDS = SURFACE_CATEGORY_IDS
 CLASS_INDEX_BY_COCO_ID = {category_id: index for index, category_id in enumerate(COCO_CATEGORY_IDS)}
+SUPPORTED_CATEGORY_CONTRACTS = {
+    "surface3": SURFACE_CATEGORY_IDS,
+    "single-palm": SINGLE_PALM_CATEGORY_IDS,
+}
+
+
+def is_supported_class_contract(class_names: tuple[str, ...]) -> bool:
+    """Return whether class names are one of the repository's task contracts."""
+    return class_names in {tuple(item.values()) for item in SUPPORTED_CATEGORY_CONTRACTS.values()}
 
 
 def validate_categories(

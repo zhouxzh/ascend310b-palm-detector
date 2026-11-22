@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml
 
 from palm_detector.dataset_contract import sha256_file
+from palm_detector.labels import is_supported_class_contract
 from palm_detector.postprocess import center_priors
 
 
@@ -29,8 +30,8 @@ def main() -> int:
     num_classes = int(config["model"]["arch"]["head"]["num_classes"])
     if len(class_names) != num_classes:
         raise ValueError("config class_names and head num_classes disagree")
-    if class_names != ("palm", "back", "side"):
-        raise ValueError("only the formal palm/back/side model contract may receive a model card")
+    if not is_supported_class_contract(class_names):
+        raise ValueError("only supported model contracts may receive a model card")
     class_table = ", ".join(f"{index + 1}={name}" for index, name in enumerate(class_names))
     head = config["model"]["arch"]["head"]
     width, height = config["data"]["val"]["input_size"]
@@ -46,7 +47,8 @@ def main() -> int:
         if run.get("purpose") == "pipeline_smoke_not_quality_measurement"
         else "This is a training candidate until independent human-reviewed task quality and ATC/ACL performance evidence is recorded."
     )
-    text = f"""# NanoDet palm detector\n\n## Identity\n\n- Run ID: `{run['run_id']}`\n- Architecture: `{architecture}`\n- Classes: `{class_table}`\n- Checkpoint SHA-256: `{sha256_file(args.run_dir / 'model_best/model_best.ckpt')}`\n- ONNX SHA-256: `{sha256_file(args.onnx)}`\n- NanoDet upstream commit: `{run['upstream_nanodet']['commit']}`\n\n## Input\n\n- Tensor: `data`, `float32`, shape `1x3x{height}x{width}`\n- OpenCV BGR input, {input_resize} to `{width}x{height}`\n- Normalize BGR 0-255 values with mean `{mean}` and standard deviation `{std}`\n\n## Output and host postprocessing\n\n- Tensor: `output`, `float32`, shape `1x{prior_count}x{output_channels}`\n- Layout per prior: {num_classes} sigmoid class score(s) followed by four {reg_max + 1}-bin DFL distributions\n- Feature strides: `{list(strides)}`; prior offset: `{0.0 if architecture == 'NanoDetPlus' else 0.5}`\n- Decode and class-aware NMS remain on the host; reference implementation: `src/palm_detector/postprocess.py`.\n\n## Provenance\n\n- Base config SHA-256: `{run['base_config']['sha256']}`\n- Run config SHA-256: `{run['run_config']['sha256']}`\n- Data audit SHA-256: `{run['data_audit']['sha256']}`\n- Pretrained checkpoint URL: `{run['pretrained']['upstream_url']}`\n- Pretrained checkpoint SHA-256: `{run['pretrained']['verified_sha256']}`\n- ONNX validation report: `{args.onnx_report}`\n\n{status}\n"""
+    title = "NanoDet Palm Surface Detector" if len(class_names) == 3 else "NanoDet Single-Palm Detector"
+    text = f"""# {title}\n\n## Identity\n\n- Run ID: `{run['run_id']}`\n- Architecture: `{architecture}`\n- Classes: `{class_table}`\n- Checkpoint SHA-256: `{sha256_file(args.run_dir / 'model_best/model_best.ckpt')}`\n- ONNX SHA-256: `{sha256_file(args.onnx)}`\n- NanoDet upstream commit: `{run['upstream_nanodet']['commit']}`\n\n## Input\n\n- Tensor: `data`, `float32`, shape `1x3x{height}x{width}`\n- OpenCV BGR input, {input_resize} to `{width}x{height}`\n- Normalize BGR 0-255 values with mean `{mean}` and standard deviation `{std}`\n\n## Output and host postprocessing\n\n- Tensor: `output`, `float32`, shape `1x{prior_count}x{output_channels}`\n- Layout per prior: {num_classes} sigmoid class score(s) followed by four {reg_max + 1}-bin DFL distributions\n- Feature strides: `{list(strides)}`; prior offset: `{0.0 if architecture == 'NanoDetPlus' else 0.5}`\n- Decode and class-aware NMS remain on the host; reference implementation: `src/palm_detector/postprocess.py`.\n\n## Provenance\n\n- Base config SHA-256: `{run['base_config']['sha256']}`\n- Run config SHA-256: `{run['run_config']['sha256']}`\n- Data audit SHA-256: `{run['data_audit']['sha256']}`\n- Pretrained checkpoint URL: `{run['pretrained']['upstream_url']}`\n- Pretrained checkpoint SHA-256: `{run['pretrained']['verified_sha256']}`\n- ONNX validation report: `{args.onnx_report}`\n\n{status}\n"""
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")
     print(args.output)

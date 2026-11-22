@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from palm_detector.labels import is_supported_class_contract
+
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "configs/picodet-surface3-320-letterbox-v004.yml"
 OUTPUT = ROOT / "artifacts/picodet-surface3-320-v004/configs"
@@ -37,8 +39,8 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
     preprocessing = matrix.get("preprocessing", {})
     mediapipe_letterbox = preprocessing.get("mode") == "mediapipe_letterbox"
     classes = tuple(matrix["classes"])
-    if classes != ("palm", "back", "side"):
-        raise ValueError("PicoDet classes must be palm/back/side")
+    if not is_supported_class_contract(classes):
+        raise ValueError("PicoDet class contract is unsupported")
     if mediapipe_letterbox:
         train_transforms = [{"Decode": {}}]
         if preprocessing.get("random_crop", True):

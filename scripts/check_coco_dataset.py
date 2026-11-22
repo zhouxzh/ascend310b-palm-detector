@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from palm_detector.dataset_contract import SplitSpec, validate_splits
-from palm_detector.labels import SURFACE_CATEGORY_IDS
+from palm_detector.labels import SUPPORTED_CATEGORY_CONTRACTS
 
 
 def main() -> int:
@@ -19,6 +19,7 @@ def main() -> int:
     parser.add_argument("--allow-missing-subject-id", action="store_true")
     parser.add_argument("--allow-missing-session-id", action="store_true")
     parser.add_argument("--allow-empty-classes", action="store_true", help="permit a class-free split, for example a low-count gate set")
+    parser.add_argument("--category-contract", choices=tuple(SUPPORTED_CATEGORY_CONTRACTS), default="surface3")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     names = [item[0] for item in args.split]
@@ -28,7 +29,7 @@ def main() -> int:
         [SplitSpec(name, Path(annotation), Path(images_root)) for name, annotation, images_root in args.split],
         verify_image_hashes=args.verify_image_hashes,
         decode_images=not args.skip_image_decode,
-        category_ids=SURFACE_CATEGORY_IDS,
+        category_ids=SUPPORTED_CATEGORY_CONTRACTS[args.category_contract],
         require_subject_id=not args.allow_missing_subject_id,
         require_session_id=not args.allow_missing_session_id,
         require_all_classes=not args.allow_empty_classes,

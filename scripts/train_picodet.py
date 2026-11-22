@@ -66,8 +66,10 @@ def main() -> int:
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     classes = tuple(manifest["classes"])
-    if classes != ("palm", "back", "side"):
-        raise ValueError("PicoDet class contract must be palm/back/side")
+    from palm_detector.labels import is_supported_class_contract
+
+    if not is_supported_class_contract(classes):
+        raise ValueError("PicoDet class contract is unsupported")
     config_path = Path(manifest["training_config_path"])
     if not config_path.is_file() or not (args.upstream / "tools/train.py").is_file():
         raise FileNotFoundError("generated config or pinned PaddleDetection checkout is missing")

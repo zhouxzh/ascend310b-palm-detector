@@ -56,6 +56,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-config", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--runs-root", type=Path, default=ROOT / "artifacts/runs")
     parser.add_argument("--pretrained-checkpoint", type=Path, required=True)
     parser.add_argument("--pretrained-manifest", type=Path, required=True)
     parser.add_argument("--data-report", type=Path, required=True)
@@ -63,7 +64,7 @@ def main() -> int:
     args = parser.parse_args()
     if any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_." for character in args.run_id):
         parser.error("run id may contain only letters, digits, '-', '_', and '.'")
-    run_dir = ROOT / "artifacts/runs" / args.run_id
+    run_dir = args.runs_root.resolve() / args.run_id
     if run_dir.exists():
         parser.error(f"run directory already exists: {run_dir}")
     if not args.pretrained_checkpoint.is_file() or not args.pretrained_manifest.is_file() or not args.data_report.is_file():

@@ -1,0 +1,32 @@
+# Complete NanoDet model-zoo matrix for the one-class palm_surface task.
+schema_version: 1
+task: single_palm
+dataset: data/portable-hagridv2-mediapipe-hand/coco-single-palm-v001
+classes: [palm_surface]
+seed: 42
+early_stop: {patience: 8, min_delta: 0.001}
+augmentation:
+  flip_probability: 0.5
+  scale: [0.9, 1.1]
+  rotation: 10.0
+  translate: 0.05
+  brightness: 0.10
+  contrast: [0.8, 1.2]
+  saturation: [0.8, 1.2]
+variants:
+  - {id: legacy-efficientlite0-320, source: legacy_v0.x_configs/EfficientNet-Lite/nanodet-EfficientNet-Lite0_320.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-efficientlite0-320.ckpt, manifest: data/manifests/nanodet-legacy-efficientlite0-320_checkpoint.json}
+  - {id: legacy-efficientlite1-416, source: legacy_v0.x_configs/EfficientNet-Lite/nanodet-EfficientNet-Lite1_416.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-efficientlite1-416.ckpt, manifest: data/manifests/nanodet-legacy-efficientlite1-416_checkpoint.json}
+  - {id: legacy-efficientlite2-512, source: legacy_v0.x_configs/EfficientNet-Lite/nanodet-EfficientNet-Lite2_512.yml, batch_size: 24, checkpoint: artifacts/pretrained/nanodet-legacy-efficientlite2-512.ckpt, manifest: data/manifests/nanodet-legacy-efficientlite2-512_checkpoint.json}
+  - {id: legacy-repvgg-a0-416, source: legacy_v0.x_configs/RepVGG/nanodet-RepVGG-A0_416.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-repvgg-a0-416.ckpt, manifest: data/manifests/nanodet-legacy-repvgg-a0-416_checkpoint.json}
+  - {id: legacy-transformer-320, source: legacy_v0.x_configs/Transformer/nanodet-t.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-t-320.ckpt, manifest: data/manifests/nanodet-legacy-t-320_checkpoint.json}
+  - {id: legacy-g-416, source: legacy_v0.x_configs/nanodet-g.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-g-416.ckpt, manifest: data/manifests/nanodet-legacy-g-416_checkpoint.json}
+  - {id: legacy-m05-320, source: legacy_v0.x_configs/nanodet-m-0.5x.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-m05-320.ckpt, manifest: data/manifests/nanodet-legacy-m05-320_checkpoint.json}
+  - {id: legacy-m-320, source: legacy_v0.x_configs/nanodet-m.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-m-320.ckpt, manifest: data/manifests/nanodet-legacy-m-320_checkpoint.json}
+  - {id: legacy-m15-320, source: legacy_v0.x_configs/nanodet-m-1.5x.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-m15-320.ckpt, manifest: data/manifests/nanodet-legacy-m15-320_checkpoint.json}
+  - {id: legacy-m-416, source: legacy_v0.x_configs/nanodet-m-416.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-legacy-m-416.ckpt, manifest: data/manifests/nanodet-legacy-m-416_checkpoint.json}
+  - {id: legacy-m15-416, source: legacy_v0.x_configs/nanodet-m-1.5x-416.yml, batch_size: 24, checkpoint: artifacts/pretrained/nanodet-legacy-m15-416.ckpt, manifest: data/manifests/nanodet-legacy-m15-416_checkpoint.json}
+  - {id: plus-m-320, source: nanodet-plus-m_320.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-plus-m_416_checkpoint.ckpt, manifest: data/manifests/nanodet-plus-m_416_checkpoint.json}
+  - {id: plus-m15-320, source: nanodet-plus-m-1.5x_320.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-plus-m15-320.ckpt, manifest: data/manifests/nanodet-plus-m15-320_checkpoint.json}
+  - {id: plus-m-416, source: nanodet-plus-m_416.yml, batch_size: 32, checkpoint: artifacts/pretrained/nanodet-plus-m_416_checkpoint.ckpt, manifest: data/manifests/nanodet-plus-m_416_checkpoint.json}
+  - {id: plus-m15-416, source: nanodet-plus-m-1.5x_416.yml, batch_size: 24, checkpoint: artifacts/pretrained/nanodet-plus-m15-416.ckpt, manifest: data/manifests/nanodet-plus-m15-416_checkpoint.json}
+  - {id: plus-convnext-nano-640, source: convnext/nanodet-plus_convnext-nano_640.yml, batch_size: 8, checkpoint: artifacts/pretrained/convnext-nano-640-backbone.ckpt, manifest: data/manifests/convnext-nano-640-backbone.json}

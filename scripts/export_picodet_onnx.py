@@ -16,6 +16,8 @@ import numpy as np
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+from palm_detector.labels import is_supported_class_contract
 
 
 def sha256(path: Path) -> str:
@@ -120,8 +122,8 @@ def main() -> int:
     preprocess = preprocessing_contract(config)
     run_metadata = json.loads((args.run_dir / "run.json").read_text(encoding="utf-8"))
     classes = tuple(run_metadata.get("classes", ()))
-    if classes != ("palm", "back", "side") or int(config["num_classes"]) != len(classes):
-        raise ValueError("PicoDet export requires the formal palm/back/side class contract")
+    if not is_supported_class_contract(classes) or int(config["num_classes"]) != len(classes):
+        raise ValueError("PicoDet export requires a supported class contract")
     height, width = config["TestReader"]["inputs_def"]["image_shape"][2:]
     export_root = args.run_dir / "onnx-export"
     env = os.environ.copy()
@@ -194,7 +196,7 @@ def main() -> int:
     geometry = str(preprocess["geometry"])
     card.write_text(
         "\n".join([
-            "# PicoDet Palm Surface Detector",
+            "# PicoDet Palm Surface Detector" if len(classes) == 3 else "# PicoDet Single-Palm Detector",
             "",
             f"- Run: `{args.run_dir.name}`",
             "- Classes: " + ", ".join(f"`{name}`" for name in classes),

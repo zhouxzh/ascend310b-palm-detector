@@ -26,12 +26,13 @@ def main() -> int:
         raise FileNotFoundError("PicoDet config, best checkpoint, or test annotations are missing")
     metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     classes = tuple(metadata.get("classes", ()))
-    if classes != ("palm", "back", "side"):
-        raise ValueError("PicoDet run must use the palm/back/side class contract")
     sys.path.insert(0, str(ROOT / "src"))
     sys.path.insert(0, str(args.upstream.resolve()))
+    from palm_detector.labels import is_supported_class_contract
     from palm_detector.paddledetection_extensions import install_paddledetection_extensions
 
+    if not is_supported_class_contract(classes):
+        raise ValueError("PicoDet run uses an unsupported class contract")
     install_paddledetection_extensions()
     import paddle
     from ppdet.core.workspace import load_config
