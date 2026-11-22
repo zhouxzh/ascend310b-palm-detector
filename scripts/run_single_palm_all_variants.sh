@@ -248,6 +248,7 @@ run_picodet_variant() {
   local run_dir="$3"
   local inventory="$4"
   local state="$5"
+  record_state picodet "$geometry" "$variant" running "$run_dir"
   if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
     env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/run_picodet_sweep.py \
     --inventory "$inventory" --state "$state" --runs-root "$PICO_RUNS" \
@@ -270,7 +271,7 @@ run_picodet_matrix() {
   fi
   while IFS=$'\t' read -r variant size; do
     local run_dir="$PICO_RUNS/single-palm-v001-${geometry}-${variant}-seed-42"
-    record_state picodet "$geometry" "$variant" running "$run_dir"
+    record_state picodet "$geometry" "$variant" queued "$run_dir"
     if ! with_run_lock "$run_dir" with_picodet_pipeline_lock run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
       refresh_comparison
       continue
