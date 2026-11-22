@@ -55,6 +55,23 @@ def newest_resume_prefix(save_dir: Path) -> Path | None:
     return max(candidates, default=(0, None))[1]
 
 
+def synchronize_run_config(source: Path, destination: Path, save_dir: Path) -> None:
+    """Copy a repaired recipe only before a checkpointed run has begun.
+
+    A failed initialization can legitimately be retried with a corrected
+    microbatch. Once a model/optimizer checkpoint exists, changing its recipe
+    would make resume and exported provenance inconsistent, so fail closed.
+    """
+    if not destination.exists():
+        shutil.copy2(source, destination)
+        return
+    if destination.read_bytes() == source.read_bytes():
+        return
+    if any(save_dir.glob("*.pdparams")) or any(save_dir.glob("*.pdopt")):
+        raise RuntimeError("cannot change the PicoDet config after checkpoints exist")
+    shutil.copy2(source, destination)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, required=True)
@@ -117,8 +134,7 @@ def main() -> int:
     tensorboard_dir = args.run_dir / "tensorboard"
     progress_path = args.run_dir / "training-progress.json"
     copied_config = args.run_dir / "config.yml"
-    if not copied_config.exists():
-        shutil.copy2(config_path, copied_config)
+    synchronize_run_config(config_path, copied_config, save_dir)
 
     cfg = load_config(str(config_path))
     cfg.save_dir = str(save_dir)
