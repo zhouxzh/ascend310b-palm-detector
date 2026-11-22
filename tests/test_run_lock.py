@@ -48,3 +48,10 @@ class RunLockTest(unittest.TestCase):
         self.assertIn('if [[ ! -f "$run_dir/config.yml" ]]; then', source)
         self.assertIn('local lock_root="$EXPERIMENT_ROOT/.run-locks"', source)
         self.assertNotIn('exec {run_lock_fd}>"$run_dir/.run.lock"', source)
+
+    def test_controller_retries_failed_runs_from_their_existing_artifacts(self) -> None:
+        source = (Path(__file__).resolve().parents[1] / "scripts" / "run_single_palm_all_variants.sh").read_text(encoding="utf-8")
+        self.assertIn('readonly MAX_RUN_ATTEMPTS="${SINGLE_PALM_MAX_RUN_ATTEMPTS:-3}"', source)
+        self.assertIn('run_with_retries()', source)
+        self.assertIn('record_state "$family" "$geometry" "$variant" retrying', source)
+        self.assertIn('failed after ${attempt}/${MAX_RUN_ATTEMPTS} attempts', source)

@@ -17,6 +17,8 @@ readonly COMPARISON_PATH="${SINGLE_PALM_COMPARISON_PATH:-$EXPERIMENT_ROOT/interi
 readonly FINAL_COMPARISON_PATH="${SINGLE_PALM_FINAL_COMPARISON_PATH:-$EXPERIMENT_ROOT/final-comparison.json}"
 readonly PICO_SWEEP_STATE_PREFIX="${SINGLE_PALM_PICO_SWEEP_STATE_PREFIX:-$PICO_ROOT/sweep-state}"
 readonly TEST_ANNOTATIONS="$DATASET/annotations/instances_test.json"
+readonly MAX_RUN_ATTEMPTS="${SINGLE_PALM_MAX_RUN_ATTEMPTS:-3}"
+readonly RETRY_DELAY_SECONDS="${SINGLE_PALM_RETRY_DELAY_SECONDS:-30}"
 
 usage() {
   cat <<'EOF'
@@ -68,6 +70,14 @@ esac
 
 cd "$ROOT"
 mkdir -p "$EXPERIMENT_ROOT" "$NANO_RUNS" "$PICO_RUNS"
+if ! [[ "$MAX_RUN_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'SINGLE_PALM_MAX_RUN_ATTEMPTS must be a positive integer\n' >&2
+  exit 2
+fi
+if ! [[ "$RETRY_DELAY_SECONDS" =~ ^(0|[1-9][0-9]*)$ ]]; then
+  printf 'SINGLE_PALM_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2
+  exit 2
+fi
 
 record_state() {
   local family="$1"
@@ -101,6 +111,33 @@ PY
 refresh_comparison() {
   PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/summarize_single_palm_models.py \
     --experiment-root "$EXPERIMENT_ROOT" --output "$COMPARISON_PATH"
+}
+
+run_with_retries() {
+  local family="$1"
+  local geometry="$2"
+  local variant="$3"
+  local run_dir="$4"
+  shift 4
+  local attempt=1
+  local status
+  while true; do
+    if "$@"; then
+      return 0
+    else
+      status=$?
+    fi
+    if ((attempt >= MAX_RUN_ATTEMPTS)); then
+      record_state "$family" "$geometry" "$variant" failed "$run_dir" \
+        "failed after ${attempt}/${MAX_RUN_ATTEMPTS} attempts (exit ${status})"
+      return "$status"
+    fi
+    record_state "$family" "$geometry" "$variant" retrying "$run_dir" \
+      "attempt ${attempt}/${MAX_RUN_ATTEMPTS} failed (exit ${status}); resuming after ${RETRY_DELAY_SECONDS}s"
+    refresh_comparison
+    sleep "$RETRY_DELAY_SECONDS"
+    ((attempt += 1))
+  done
 }
 
 with_run_lock() {
@@ -273,7 +310,8 @@ run_picodet_matrix() {
   while IFS=$'\t' read -r variant size; do
     local run_dir="$PICO_RUNS/single-palm-v001-${geometry}-${variant}-seed-42"
     record_state picodet "$geometry" "$variant" queued "$run_dir"
-    if ! with_run_lock "$run_dir" with_picodet_pipeline_lock run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
+    if ! run_with_retries picodet "$geometry" "$variant" "$run_dir" \
+      with_run_lock "$run_dir" with_picodet_pipeline_lock run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
       refresh_comparison
       continue
     fi
@@ -313,7 +351,10 @@ if [[ "$family_selector" != "picodet" ]]; then
       mv "$config_root/../variant-inventory.json" "$inventory"
     fi
     while IFS=$'\t' read -r variant config checkpoint manifest; do
-      run_nanodet "$geometry" "$variant" "$config" "$checkpoint" "$manifest" || refresh_comparison
+      run_id="single-palm-v001-${geometry}-${variant}__data-v001__seed-42"
+      run_dir="$NANO_RUNS/$run_id"
+      run_with_retries nanodet "$geometry" "$variant" "$run_dir" \
+        run_nanodet "$geometry" "$variant" "$config" "$checkpoint" "$manifest" || refresh_comparison
     done < <(INVENTORY="$inventory" conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import json
 import os

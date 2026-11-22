@@ -36,3 +36,8 @@ and the final rank-ordered comparison to `final-comparison.json` and
 contains matched LetterBox-versus-direct-stretch deltas and per-framework mean,
 median, best-result, and geometry win/loss aggregates. Only completed matched
 pairs contribute to a geometry conclusion.
+
+Each run retries from its existing checkpoint up to three times after an
+interrupted training, export, or validation stage. Change the limit or delay
+with `SINGLE_PALM_MAX_RUN_ATTEMPTS` and `SINGLE_PALM_RETRY_DELAY_SECONDS`; a
+task is marked failed only after all attempts are exhausted.
