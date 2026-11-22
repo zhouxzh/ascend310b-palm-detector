@@ -103,7 +103,31 @@ refresh_comparison() {
     --experiment-root "$EXPERIMENT_ROOT" --output "$COMPARISON_PATH"
 }
 
+with_run_lock() {
+  local run_dir="$1"
+  shift
+  local run_lock_fd
+  mkdir -p "$run_dir"
+  exec {run_lock_fd}>"$run_dir/.run.lock"
+  flock -x "$run_lock_fd"
+  local status=0
+  if "$@"; then
+    status=0
+  else
+    status=$?
+  fi
+  exec {run_lock_fd}>&-
+  return "$status"
+}
+
 run_nanodet() {
+  local geometry="$1"
+  local variant="$2"
+  local run_id="single-palm-v001-${geometry}-${variant}__data-v001__seed-42"
+  with_run_lock "$NANO_RUNS/$run_id" run_nanodet_locked "$@"
+}
+
+run_nanodet_locked() {
   local geometry="$1"
   local variant="$2"
   local config="$3"
@@ -204,6 +228,22 @@ run_picodet_postprocess() {
   refresh_comparison
 }
 
+run_picodet_variant() {
+  local geometry="$1"
+  local variant="$2"
+  local run_dir="$3"
+  local inventory="$4"
+  local state="$5"
+  if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
+    env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/run_picodet_sweep.py \
+    --inventory "$inventory" --state "$state" --runs-root "$PICO_RUNS" \
+    --run-prefix "single-palm-v001-${geometry}" --only "$variant" --seed 42; then
+    record_state picodet "$geometry" "$variant" failed "$run_dir" "training failed"
+    return 1
+  fi
+  run_picodet_postprocess "$geometry" "$variant" "$run_dir"
+}
+
 run_picodet_matrix() {
   local geometry="$1"
   local matrix="$2"
@@ -217,15 +257,10 @@ run_picodet_matrix() {
   while IFS=$'\t' read -r variant size; do
     local run_dir="$PICO_RUNS/single-palm-v001-${geometry}-${variant}-seed-42"
     record_state picodet "$geometry" "$variant" running "$run_dir"
-    if ! conda run --no-capture-output -n palm-nanodet "$ROOT/scripts/run_with_host_nvidia.sh" \
-      env PYTHONPATH="$ROOT/src:$ROOT/third_party/PaddleDetection" python scripts/run_picodet_sweep.py \
-      --inventory "$inventory" --state "$state" --runs-root "$PICO_RUNS" \
-      --run-prefix "single-palm-v001-${geometry}" --only "$variant" --seed 42; then
-      record_state picodet "$geometry" "$variant" failed "$run_dir" "training failed"
+    if ! with_run_lock "$run_dir" run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
       refresh_comparison
       continue
     fi
-    run_picodet_postprocess "$geometry" "$variant" "$run_dir" || refresh_comparison
   done < <(MATRIX="$matrix" conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import os
 import yaml
