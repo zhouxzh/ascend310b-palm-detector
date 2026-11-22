@@ -60,8 +60,6 @@ def main() -> int:
             blockers.append("direct-stretch PicoDet matrix must declare direct_stretch preprocessing")
         if picodet.get("preprocessing", {}).get("random_anisotropic_stretch") is not False:
             blockers.append("primary direct-stretch PicoDet comparison must not add random anisotropic stretch")
-    if train_pipeline.get("swap_handedness_on_flip"):
-        blockers.append("surface-class horizontal flip must not exchange class IDs")
     if train_pipeline.get("flip") != 0.5:
         blockers.append("NanoDet surface model must use 0.5 label-preserving flip")
     if args.expected_input_size is not None:

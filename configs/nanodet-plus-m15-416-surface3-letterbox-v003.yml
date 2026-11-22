@@ -55,7 +55,6 @@ data:
     keep_ratio: false
     pipeline:
       palm_letterbox: true
-      swap_handedness_on_flip: false
       perspective: 0.0
       scale: [0.9, 1.1]
       stretch: [[1.0, 1.0], [1.0, 1.0]]

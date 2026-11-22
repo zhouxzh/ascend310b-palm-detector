@@ -20,8 +20,8 @@ class VerifyOnnxMultisizeTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         cases = (
-            (640, (8, 16, 32, 64), 7, 8500, 34),
-            (512, (8, 16, 32), 10, 5376, 46),
+            (640, (8, 16, 32, 64), 7, 8500, 35),
+            (512, (8, 16, 32), 10, 5376, 47),
         )
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -34,7 +34,7 @@ class VerifyOnnxMultisizeTest(unittest.TestCase):
                             "val": {"input_size": [size, size]},
                         },
                         "model": {"arch": {"head": {
-                            "num_classes": 2, "strides": list(strides), "reg_max": reg_max,
+                            "num_classes": 3, "strides": list(strides), "reg_max": reg_max,
                         }}},
                     }))
                     model_path = root / f"model-{size}.onnx"

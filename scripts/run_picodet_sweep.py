@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INVENTORY = ROOT / "artifacts/picodet-v001/variant-inventory.json"
-STATE = ROOT / "artifacts/picodet-v001/sweep-state.json"
-RUNS_ROOT = ROOT / "artifacts/picodet-v001/runs"
-RUN_PREFIX = "picodet-v001"
+INVENTORY = ROOT / "artifacts/picodet-surface3-320-v004/variant-inventory.json"
+STATE = ROOT / "artifacts/picodet-surface3-320-v004/sweep-state.json"
+RUNS_ROOT = ROOT / "artifacts/picodet-surface3-320-v004/runs"
+RUN_PREFIX = "picodet-surface3-320-v004"
 UPSTREAM = ROOT / "third_party/PaddleDetection"
 
 

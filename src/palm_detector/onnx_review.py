@@ -62,8 +62,8 @@ class OnnxReviewModels:
                     continue
                 channels = outputs[0].get("shape", [None, None, None])[-1]
                 num_classes = report.get("num_classes", len(class_names))
-                classes = {1: ("palm",), 2: ("left_palm", "right_palm"), 3: ("palm", "back", "side")}.get(num_classes)
-                if not report.get("valid") or classes is None:
+                classes = ("palm", "back", "side")
+                if not report.get("valid") or num_classes != len(classes):
                     continue
                 if class_names != classes:
                     continue
@@ -79,14 +79,8 @@ class OnnxReviewModels:
                 run_id = report_path.parent.name
                 stamp = re.search(r"__(\d{8})-\d{4}$", run_id)
                 date = f"{stamp[1][:4]}-{stamp[1][4:6]}-{stamp[1][6:8]}" if stamp else ""
-                if "portable-handed" in run_id:
-                    source = "左右手 · 便携HaGRIDv2"
-                elif "portable-hagridv2-palm" in run_id:
-                    source = "单类手 · 便携HaGRIDv2"
-                else:
-                    source = f"{'左右手' if len(classes) == 2 else '单类手'} · {run_id}"
                 architecture = "NanoDet-Plus" if config["model"]["arch"]["name"] == "NanoDetPlus" else "NanoDet"
-                label = f"{architecture} {width} · {source}{f' · {date}' if date else ''}"
+                label = f"{architecture} {width} · 掌面三分类{f' · {date}' if date else ''}"
                 model = ReviewModel(run_id, path, report["sha256"], classes, label, input_size, strides, reg_max, 0.0 if architecture == "NanoDet-Plus" else 0.5, tuple(mean), tuple(std), letterbox)
                 self.models[model.id] = model
             except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, yaml.YAMLError):

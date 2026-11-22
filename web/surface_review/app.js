@@ -98,7 +98,7 @@ function renderQueue() {
     const copy = document.createElement("span");
     copy.className = "queue-copy";
     const title = document.createElement("strong");
-    title.textContent = `${viewNames[item.candidate_view]} · ${item.handedness === "left" ? "左手" : "右手"}`;
+    title.textContent = viewNames[item.candidate_view];
     const subtitle = document.createElement("small");
     subtitle.textContent = `${item.split.toUpperCase()} · #${item.id}`;
     copy.append(title, subtitle);
@@ -182,7 +182,7 @@ function renderPredictions() {
     const key = document.createElement("span");
     key.className = `model-result-key slot-${slot === 0 ? "a" : "b"}`;
     const top = model.detections[0];
-    const name = top ? ({ palm: "手", left_palm: "左手", right_palm: "右手" }[top.class_name] || top.class_name) : "无检测";
+    const name = top ? top.class_name : "无检测";
     key.textContent = `${slot === 0 ? "A" : "B"} · ${name}${top ? ` ${top.score.toFixed(2)}` : ""}${model.detections.length > 1 ? ` · ${model.detections.length} 个` : ""}`;
     key.title = model.label;
     legend.append(key);
@@ -195,7 +195,7 @@ function renderPredictions() {
       box.style.width = `${(x2 - x1) / item.width * 100}%`;
       box.style.height = `${(y2 - y1) / item.height * 100}%`;
       const label = document.createElement("span");
-      const name = { palm: "手", left_palm: "左手", right_palm: "右手" }[detection.class_name] || detection.class_name;
+      const name = detection.class_name;
       label.textContent = `${slot === 0 ? "A" : "B"} ${name} ${detection.score.toFixed(2)}`;
       box.append(label);
       container.append(box);
@@ -299,7 +299,7 @@ function renderReview(item) {
   $("candidate-meta").textContent = item
     ? `当前字段：${viewNames[item.view]}${item.facing == null ? "" : ` · 朝向分数 ${item.facing.toFixed(2)}`}`
     : "—";
-  $("handedness-value").textContent = item ? (item.handedness === "left" ? "左手" : "右手") : "—";
+  $("surface-view-value").textContent = item ? viewNames[item.view] : "—";
   $("annotation-id").textContent = item ? `#${item.id}` : "—";
   status.textContent = item?.review ? "已审核" : "待审核";
   status.classList.toggle("done", Boolean(item?.review));
@@ -317,7 +317,7 @@ function render() {
   const item = current();
   state.inference = null;
   renderQueue();
-  $("item-split").textContent = item ? `${item.split.toUpperCase()} · ${item.handedness === "left" ? "LEFT" : "RIGHT"}` : "—";
+  $("item-split").textContent = item ? item.split.toUpperCase() : "—";
   $("item-title").textContent = item ? item.source_image : "没有样本";
   $("item-position").textContent = `${item ? state.index + 1 : 0} / ${state.items.length}`;
   $("previous-item").disabled = state.index <= 0 || !item;

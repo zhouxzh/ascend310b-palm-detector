@@ -35,8 +35,6 @@ def build_config(source: dict, *, input_size: int) -> dict:
         dataset["keep_ratio"] = False
         dataset["pipeline"]["palm_letterbox"] = False
     pipeline = config["data"]["train"]["pipeline"]
-    if pipeline.get("swap_handedness_on_flip"):
-        raise ValueError("surface direct-stretch transform must not exchange class IDs")
     if pipeline.get("stretch") != [[1.0, 1.0], [1.0, 1.0]]:
         raise ValueError("random anisotropic stretch must remain disabled in the primary ablation")
     return config

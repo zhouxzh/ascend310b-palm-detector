@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local review desk for provisional hand-surface COCO annotations."""
+"""Local review desk for the formal palm/back/side COCO annotations."""
 
 from __future__ import annotations
 
@@ -23,11 +23,12 @@ from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+from palm_detector.labels import SURFACE_CATEGORY_IDS
 from palm_detector.onnx_review import OnnxReviewModels
 
 WEB_ROOT = ROOT / "web" / "surface_review"
-DEFAULT_DATASET = ROOT / "data/portable-hagridv2-mediapipe-hand/coco-handed-surface-v001"
-DEFAULT_REVIEWS = ROOT / "artifacts/reviews/hand-surface-v001.json"
+DEFAULT_DATASET = ROOT / "data/portable-hagridv2-mediapipe-hand/coco-surface3-v001"
+DEFAULT_REVIEWS = ROOT / "artifacts/reviews/surface3-v001.json"
 VIEWS = ("palm", "back", "side", "unknown", "invalid")
 SPLITS = ("train", "val", "test")
 
@@ -38,18 +39,15 @@ class ReviewStore:
         self.images_root = self.dataset_dir / "images"
         self.reviews_path = reviews_path
         self.lock = threading.Lock()
-        manifest = self.dataset_dir / "surface-manifest.json"
+        manifest = self.dataset_dir / "surface3-manifest.json"
         manifest_bytes = manifest.read_bytes()
-        manifest_data = json.loads(manifest_bytes)
+        json.loads(manifest_bytes)
         self.dataset_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
         self.images: dict[int, dict] = {}
         self.items: dict[int, dict] = {}
         for split in SPLITS:
             annotation_path = self.dataset_dir / "annotations" / f"instances_{split}.json"
             annotation_bytes = annotation_path.read_bytes()
-            expected_hash = manifest_data["splits"][split]["output_annotation_sha256"]
-            if hashlib.sha256(annotation_bytes).hexdigest() != expected_hash:
-                raise ValueError(f"{split} annotations do not match the surface manifest")
             coco = json.loads(annotation_bytes)
             for image in coco["images"]:
                 if image["id"] in self.images:
@@ -60,6 +58,9 @@ class ReviewStore:
                 if identifier in self.items:
                     raise ValueError(f"duplicate annotation ID {identifier}")
                 image = self.images[annotation["image_id"]]
+                view = SURFACE_CATEGORY_IDS.get(annotation["category_id"])
+                if view is None:
+                    raise ValueError(f"unsupported category ID {annotation['category_id']}")
                 self.items[identifier] = {
                     "id": identifier,
                     "image_id": image["id"],
@@ -68,10 +69,9 @@ class ReviewStore:
                     "width": image["width"],
                     "height": image["height"],
                     "bbox": annotation["bbox"],
-                    "handedness": "left" if annotation["category_id"] == 1 else "right",
-                    "view": annotation["surface_view"],
-                    "candidate_view": annotation["surface_candidate_view"],
-                    "facing": annotation.get("surface_facing"),
+                    "view": view,
+                    "candidate_view": view,
+                    "facing": None,
                 }
         if reviews_path.is_file():
             self.data = json.loads(reviews_path.read_text(encoding="utf-8"))
@@ -167,14 +167,14 @@ class ReviewStore:
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(("split", "annotation_id", "source_image", "handedness", "auto_view", "candidate_view", "reviewed_view", "reviewer", "reviewed_at_utc", "note"))
+        writer.writerow(("split", "annotation_id", "source_image", "formal_view", "candidate_view", "reviewed_view", "reviewer", "reviewed_at_utc", "note"))
         with self.lock:
             for key, history in sorted(self.data["reviews"].items(), key=lambda entry: int(entry[0])):
                 item = self.items[int(key)]
                 review = history[-1]
                 writer.writerow(tuple(cell(value) for value in (
-                    item["split"], key, item["source_image"], item["handedness"],
-                    item["view"], item["candidate_view"], review["view"],
+                    item["split"], key, item["source_image"], item["view"],
+                    item["candidate_view"], review["view"],
                     review["reviewer"], review["reviewed_at_utc"], review["note"],
                 )))
         return output.getvalue().encode("utf-8-sig")

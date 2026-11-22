@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download and checksum the exact LCNet weights used by the PicoDet sweep."""
+"""Download and checksum the exact LCNet weights used by surface PicoDet runs."""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ def sha256(path: Path) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--matrix", type=Path, default=ROOT / "configs/picodet-sweep-v001.yml")
-    parser.add_argument("--output", type=Path, default=ROOT / "artifacts/picodet-v001/pretrained")
+    parser.add_argument("--matrix", type=Path, default=ROOT / "configs/picodet-surface3-320-letterbox-v004.yml")
+    parser.add_argument("--output", type=Path, default=ROOT / "artifacts/pretrained/picodet")
     args = parser.parse_args()
     matrix = yaml.safe_load(args.matrix.read_text(encoding="utf-8"))
     args.output.mkdir(parents=True, exist_ok=True)

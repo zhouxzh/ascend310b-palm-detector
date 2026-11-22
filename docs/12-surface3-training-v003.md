@@ -8,8 +8,8 @@ background negatives.
 
 ## Data
 
-The source `coco-handed-surface-v001` annotations are user-confirmed human
-labels. `scripts/prepare_surface3_coco.py` produces an immutable derivative:
+The materialized `coco-surface3-v001` annotations are user-confirmed human
+labels. The formal dataset is immutable for training and test evaluation:
 
 - Unique training: palm 5,774, back 941, side 32.
 - Balanced training: side-containing images repeat 32 times, producing palm
@@ -94,11 +94,6 @@ rejected as `unknown` by the calling application.
 
 ## 320 Resolution Ablation
 
-The repository retains older 320-square NanoDet and PicoDet artifacts, but
-they use the prior `left_palm`/`right_palm` label contract and a different
-dataset version. Their scores must not be compared with the formal surface3
-results above.
-
 `scripts/run_surface3_320_v004.sh` instead performs the valid resolution
 comparison. It trains 320-square counterparts for all completed 416 finalists:
 NanoDet-Plus-m, NanoDet-Plus-m1.5, PicoDet-L, and PicoDet-M. Each counterpart
@@ -138,13 +133,28 @@ photometric distortion remain enabled. A random-stretch experiment is only
 meaningful as a separate follow-up if direct stretch first beats LetterBox on
 the frozen test metric.
 
+The completed frozen-test comparison did not promote direct stretch:
+
+| Model | LetterBox mAP50-95 | Direct stretch mAP50-95 | Decision |
+| --- | ---: | ---: | --- |
+| NanoDet-Plus-m 320 | 0.5184 | 0.4514 | LetterBox |
+| NanoDet-Plus-m1.5 320 | 0.5292 | 0.5171 | LetterBox |
+| PicoDet-L 320 | 0.5189 | 0.4994 | LetterBox |
+| PicoDet-M 320 | 0.4731 | 0.4789 | Stretch is higher within the pair, but below the release candidate |
+
+LetterBox therefore remains the formal deployment geometry. Across every
+completed candidate, NanoDet-Plus-m 416 LetterBox remains the strongest frozen
+test result at `0.5321` mAP50-95. No random-anisotropic-stretch follow-up is
+scheduled.
+
 ## Launch
 
 ```bash
 ./scripts/run_surface3_v003.sh
+./scripts/run_surface3_320_v004.sh
+./scripts/run_surface3_320_stretch_v005.sh
 ```
 
-The controller runs NanoDet first, exports a verified ONNX model, then runs
-PicoDet and exports a verified ONNX model. It is resumable and paired with
-`scripts/monitor_surface3_v003_gpu.sh`, which stops the v003 controller after
-three 30-second GPU samples at or above 82C.
+Each controller is resumable and exports a verified ONNX model after checkpoint
+selection. The paired GPU monitor stops only its own controller after three
+30-second samples at or above 82C.

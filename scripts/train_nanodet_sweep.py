@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "third_party/nanodet"))
 
 from palm_detector.nanodet_extensions import install_nanodet_extensions
-from palm_detector.labels import CLASS_NAMES, SURFACE_CATEGORY_IDS
+from palm_detector.labels import SURFACE_CATEGORY_IDS
 
 install_nanodet_extensions()
 
@@ -97,13 +97,9 @@ def main() -> int:
         raise ValueError("early-stop patience must be positive and min-delta must be nonnegative")
     load_config(cfg, str(args.config))
     classes = tuple(cfg.class_names)
-    allowed_classes = {CLASS_NAMES, tuple(SURFACE_CATEGORY_IDS.values())}
-    if cfg.model.arch.head.num_classes != len(classes) or classes not in allowed_classes:
-        raise ValueError("the detector class contract must be anatomical hands or palm/back/side")
-    if classes == CLASS_NAMES and cfg.data.train.pipeline.flip != 0 and not cfg.data.train.pipeline.get("swap_handedness_on_flip", False):
-        raise ValueError("anatomical horizontal flip requires swap_handedness_on_flip=true")
-    if classes == tuple(SURFACE_CATEGORY_IDS.values()) and cfg.data.train.pipeline.get("swap_handedness_on_flip", False):
-        raise ValueError("surface labels must not exchange class IDs on horizontal flip")
+    surface_classes = tuple(SURFACE_CATEGORY_IDS.values())
+    if cfg.model.arch.head.num_classes != len(surface_classes) or classes != surface_classes:
+        raise ValueError("the detector class contract must be palm/back/side")
     if cfg.data.train.pipeline.get("palm_letterbox", False) and not cfg.data.val.pipeline.get("palm_letterbox", False):
         raise ValueError("NanoDet LetterBox must be used for both train and validation")
     if cfg.device.gpu_ids != [0] or not torch.cuda.is_available():

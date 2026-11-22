@@ -32,10 +32,4 @@ if [[ "$TASK" == "test" ]]; then
   PYTHONPATH=src conda run --no-capture-output -n palm-nanodet \
     python scripts/evaluate_coco_metrics.py --ground-truth "$TEST_ANNOTATIONS" \
     --predictions "$prediction_file" --output "$EVALUATION_DIR/coco-metrics.json"
-  NUM_CLASSES="$(conda run --no-capture-output -n palm-nanodet python -c "import yaml; print(yaml.safe_load(open('$RUN_DIR/config.yml', encoding='utf-8'))['model']['arch']['head']['num_classes'])")"
-  if [[ "$NUM_CLASSES" == "2" ]]; then
-    PYTHONPATH=src conda run --no-capture-output -n palm-nanodet \
-      python scripts/evaluate_task_metrics.py --ground-truth "$TEST_ANNOTATIONS" \
-      --predictions "$prediction_file" --output "$EVALUATION_DIR/task-metrics.json"
-  fi
 fi

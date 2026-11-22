@@ -102,15 +102,10 @@ def main() -> int:
     args = parse_args()
     root = Path("/home/zhong/Documents/ascend310b-palm-detector")
     sys.path.insert(0, str(root / "src"))
-    from palm_detector.labels import COCO_CATEGORY_IDS, SINGLE_PALM_CATEGORY_IDS, SURFACE_CATEGORY_IDS
+    from palm_detector.labels import SURFACE_CATEGORY_IDS
     from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr, preprocess_picodet_bgr_letterbox
     from palm_detector.postprocess import decode_nanodet_plus, preprocess_bgr, preprocess_bgr_letterbox
 
-    contracts = {
-        "left_right": COCO_CATEGORY_IDS,
-        "single_palm": SINGLE_PALM_CATEGORY_IDS,
-        "surface3": SURFACE_CATEGORY_IDS,
-    }
     jobs = json.loads(args.jobs.read_text(encoding="utf-8"))
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -128,7 +123,9 @@ def main() -> int:
         job_dir.mkdir(parents=True, exist_ok=True)
         report: dict[str, Any] = {"name": name, "status": "running", "job": job}
         try:
-            expected = contracts[job["category_contract"]]
+            if job.get("category_contract") != "surface3":
+                raise ValueError("only the palm/back/side surface3 contract is supported")
+            expected = SURFACE_CATEGORY_IDS
             class_names = tuple(expected[key] for key in sorted(expected))
             onnx_path = Path(job["onnx"])
             annotations = Path(job["annotations"])

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from .labels import COCO_CATEGORY_IDS, validate_categories
+from .labels import SURFACE_CATEGORY_IDS, validate_categories
 
 REQUIRED_IMAGE_FIELDS = ("id", "file_name", "width", "height", "subject_id", "session_id", "sha256")
 
@@ -60,7 +60,7 @@ def validate_split(
     *,
     verify_image_hashes: bool = False,
     decode_images: bool = True,
-    category_ids: dict[int, str] = COCO_CATEGORY_IDS,
+    category_ids: dict[int, str] = SURFACE_CATEGORY_IDS,
     require_subject_id: bool = True,
     require_session_id: bool = True,
     require_all_classes: bool = True,
@@ -194,7 +194,7 @@ def validate_split(
 def validate_splits(
     specs: Iterable[SplitSpec],
     *,
-    category_ids: dict[int, str] = COCO_CATEGORY_IDS,
+    category_ids: dict[int, str] = SURFACE_CATEGORY_IDS,
     require_subject_id: bool = True,
     require_session_id: bool = True,
     **kwargs: Any,

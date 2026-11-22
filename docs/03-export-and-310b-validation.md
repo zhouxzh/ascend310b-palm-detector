@@ -1,17 +1,18 @@
 # Export and Ascend 310B validation
 
-The candidate export is static ONNX with input `data: float32[1,3,320,320]`.
-It contains only the forward graph and emits `output: float32[1,2125,34]`.
-The 34 fields per prior are two sigmoid class scores plus four 8-bin DFL
+The formal candidate export is static ONNX with input `data: float32[1,3,416,416]`.
+It contains only the forward graph and emits `output: float32[1,3598,35]`.
+The 35 fields per prior are three sigmoid class scores plus four 8-bin DFL
 distributions (`reg_max=7`). Decode and class-aware NMS are host-side in
 `src/palm_detector/postprocess.py`; this avoids making deployment depend on
 ONNX NMS conversion behavior.
 
-The preprocessing contract is OpenCV BGR, direct bilinear resize to `320x320`,
-then channelwise BGR normalization with mean `[103.53, 116.28, 123.675]` and
-standard deviation `[57.375, 57.12, 58.395]`. There is no image flip and no
-letterbox padding in the baseline. The display layer must not mirror an image
-without updating how anatomical labels are presented.
+The preprocessing contract is OpenCV BGR, centered zero-padded LetterBox to
+`416x416`, then channelwise BGR normalization with mean
+`[103.53, 116.28, 123.675]` and standard deviation
+`[57.375, 57.12, 58.395]`. The inverse LetterBox transform maps decoded boxes
+back to original-image coordinates. The display layer must not alter image
+geometry before inference.
 
 The host DFL decoder uses NanoDet's grid origin `arange(size) * stride`, with
 no half-cell offset. An older host decoder added `0.5 * stride`, shifting ONNX
@@ -45,12 +46,5 @@ export contract while avoiding a modification to its checkout. It disables only
 the upstream tool's verbose graph print; it keeps opset 11, fixed shape, the
 same input/output names, graph simplification, and host-side postprocessing.
 
-`scripts/build_310b_handoff.py` prepares an ignored package containing the
-ONNX, model card, 20 NCHW preprocessed `.npy` inputs, ONNX reference raw
-outputs, expected host-side detections, and a hash manifest. Each input is also
-provided as a little-endian float32 `.bin` file for ACL runners. Copy that package
-to the board, use `scripts/compile_atc_310b.sh` after sourcing the board CANN
-environment, run an ACL inference runner on every input, and compare each
-output with `scripts/compare_310b_raw_output.py`. The target board operator
-must supply the actual `--soc_version`; this project intentionally does not
-guess it from the training server.
+The target board operator must supply the actual `--soc_version`; this project
+intentionally does not guess it from the training server.

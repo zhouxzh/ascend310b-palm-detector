@@ -10,9 +10,9 @@ from pathlib import Path
 
 import cv2
 
-from palm_detector.labels import COCO_CATEGORY_IDS, validate_categories
+from palm_detector.labels import SURFACE_CATEGORY_IDS, validate_categories
 
-COLORS = {1: (255, 140, 0), 2: (0, 190, 255)}
+COLORS = {1: (72, 180, 72), 2: (0, 190, 255), 3: (255, 140, 0)}
 
 
 def _draw(image, bbox, text, color, thickness):
@@ -30,7 +30,7 @@ def main() -> int:
     parser.add_argument("--score-threshold", type=float, default=0.35)
     args = parser.parse_args()
     coco = json.loads(args.ground_truth.read_text(encoding="utf-8"))
-    errors = validate_categories(coco.get("categories", []))
+    errors = validate_categories(coco.get("categories", []), SURFACE_CATEGORY_IDS)
     if errors:
         raise ValueError("; ".join(errors))
     annotations = defaultdict(list)
@@ -47,9 +47,9 @@ def main() -> int:
         if image is None:
             raise FileNotFoundError(image_info["file_name"])
         for item in annotations[image_info["id"]]:
-            _draw(image, item["bbox"], f"GT {COCO_CATEGORY_IDS[item['category_id']]}", COLORS[item["category_id"]], 3)
+            _draw(image, item["bbox"], f"GT {SURFACE_CATEGORY_IDS[item['category_id']]}", COLORS[item["category_id"]], 3)
         for item in predictions[image_info["id"]]:
-            _draw(image, item["bbox"], f"P {COCO_CATEGORY_IDS[item['category_id']]} {item['score']:.2f}", COLORS[item["category_id"]], 1)
+            _draw(image, item["bbox"], f"P {SURFACE_CATEGORY_IDS[item['category_id']]} {item['score']:.2f}", COLORS[item["category_id"]], 1)
         output = args.output_dir / image_info["file_name"]
         if not cv2.imwrite(str(output), image):
             raise RuntimeError(f"could not write {output}")

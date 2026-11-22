@@ -11,8 +11,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "configs/picodet-sweep-v001.yml"
-OUTPUT = ROOT / "artifacts/picodet-v001/configs"
+MATRIX = ROOT / "configs/picodet-surface3-320-letterbox-v004.yml"
+OUTPUT = ROOT / "artifacts/picodet-surface3-320-v004/configs"
 
 
 def _sha256(path: Path) -> str:
@@ -37,16 +37,13 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
     preprocessing = matrix.get("preprocessing", {})
     mediapipe_letterbox = preprocessing.get("mode") == "mediapipe_letterbox"
     classes = tuple(matrix["classes"])
-    if classes not in {("left_palm", "right_palm"), ("palm", "back", "side")}:
-        raise ValueError("PicoDet classes must be anatomical hands or palm/back/side")
+    if classes != ("palm", "back", "side"):
+        raise ValueError("PicoDet classes must be palm/back/side")
     if mediapipe_letterbox:
         train_transforms = [{"Decode": {}}]
         if preprocessing.get("random_crop", True):
             train_transforms.append({"RandomCrop": {}})
-        if classes == ("left_palm", "right_palm"):
-            train_transforms.append({"PalmHandednessFlip": {"prob": float(preprocessing.get("handedness_flip_probability", 0.5))}})
-        else:
-            train_transforms.append({"RandomFlip": {"prob": float(preprocessing.get("flip_probability", 0.5))}})
+        train_transforms.append({"RandomFlip": {"prob": float(preprocessing.get("flip_probability", 0.5))}})
         if preprocessing.get("random_distort", True):
             train_transforms.append({"RandomDistort": {}})
         train_transforms.append({"PalmLetterBox": {"target_size": [size, size], "pad_value": int(preprocessing.get("pad_value", 0))}})
@@ -63,9 +60,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
         train_transforms = [{"Decode": {}}]
         if preprocessing.get("random_crop", True):
             train_transforms.append({"RandomCrop": {}})
-        train_transforms.append({
-            "RandomFlip": {"prob": 0.0 if classes == ("left_palm", "right_palm") else float(preprocessing.get("flip_probability", 0.5))}
-        })
+        train_transforms.append({"RandomFlip": {"prob": float(preprocessing.get("flip_probability", 0.5))}})
         if preprocessing.get("random_distort", True):
             train_transforms.append({"RandomDistort": {}})
         eval_transforms = [
@@ -128,7 +123,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
             "batch_size": 1,
         },
         "LearningRate": {"base_lr": round(item["reference_lr"] * matrix["single_gpu_count"] / matrix["reference_gpu_count"], 8)},
-        "pretrain_weights": str((ROOT / "artifacts/picodet-v001/pretrained" / pretrained["filename"]).resolve()),
+        "pretrain_weights": str((ROOT / "artifacts/pretrained/picodet" / pretrained["filename"]).resolve()),
     }
     return {
         "id": item["id"],

@@ -3,7 +3,7 @@ set -euo pipefail
 
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ENVIRONMENT="${1:-palm-nanodet}"
-readonly WHEEL="${PICODET_PADDLE_WHEEL:-$ROOT/artifacts/picodet-v001/wheels/paddlepaddle_gpu-3.5.0.dev20261113+12c390870c2-cp311-cp311-linux_x86_64.whl}"
+readonly WHEEL="${PICODET_PADDLE_WHEEL:-$ROOT/artifacts/wheels/paddlepaddle_gpu-3.5.0.dev20261113+12c390870c2-cp311-cp311-linux_x86_64.whl}"
 readonly EXPECTED_SHA256="caacee3940aaf719b685a490110630d58778b76849b248a2f17d719f3ac90c91"
 readonly TORCH_INDEX="https://download.pytorch.org/whl/cu128"
 

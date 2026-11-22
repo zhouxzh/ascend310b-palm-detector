@@ -28,11 +28,11 @@ class LetterboxTest(unittest.TestCase):
 
     def test_decode_removes_padding_before_returning_source_coordinates(self) -> None:
         transform = compute_letterbox_transform(100, 200, 320, 320)
-        output = np.zeros((1, 2125, 34), dtype=np.float32)
+        output = np.zeros((1, 2125, 35), dtype=np.float32)
         index = 10 * 40 + 20
         output[0, index, 0] = 0.99
-        output[0, index, 2:] = -50
-        output[0, index, [3, 11, 19, 27]] = 50
+        output[0, index, 3:] = -50
+        output[0, index, [4, 12, 20, 28]] = 50
         detection = decode_nanodet_plus(output, score_threshold=0.9, letterbox=transform)[0][0]
         prior = center_priors()[index]
         expected = transform.unmap_boxes(np.array([[prior[0] - 8, prior[1] - 8, prior[0] + 8, prior[1] + 8]], dtype=np.float32))[0]

@@ -1,5 +1,5 @@
-"""Shared contracts for the anatomical left/right palm detector."""
+"""Shared contracts for the palm-surface detector."""
 
-from .labels import CLASS_NAMES, COCO_CATEGORY_IDS
+from .labels import CLASS_NAMES, SURFACE_CATEGORY_IDS
 
-__all__ = ["CLASS_NAMES", "COCO_CATEGORY_IDS"]
+__all__ = ["CLASS_NAMES", "SURFACE_CATEGORY_IDS"]

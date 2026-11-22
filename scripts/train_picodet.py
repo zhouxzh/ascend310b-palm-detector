@@ -66,12 +66,12 @@ def main() -> int:
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     classes = tuple(manifest["classes"])
-    if classes not in {("left_palm", "right_palm"), ("palm", "back", "side")}:
-        raise ValueError("PicoDet class contract must be anatomical hands or palm/back/side")
+    if classes != ("palm", "back", "side"):
+        raise ValueError("PicoDet class contract must be palm/back/side")
     config_path = Path(manifest["training_config_path"])
     if not config_path.is_file() or not (args.upstream / "tools/train.py").is_file():
         raise FileNotFoundError("generated config or pinned PaddleDetection checkout is missing")
-    weights_path = ROOT / "artifacts/picodet-v001/pretrained/weights.json"
+    weights_path = ROOT / "artifacts/pretrained/picodet/weights.json"
     if not weights_path.is_file():
         raise FileNotFoundError("run scripts/acquire_picodet_pretrained.py before training")
     weight_record = json.loads(weights_path.read_text(encoding="utf-8"))["weights"].get(manifest["pretrained"]["id"])
@@ -117,13 +117,9 @@ def main() -> int:
     if cfg.num_classes != len(classes):
         raise ValueError("generated PicoDet config class count does not match its manifest")
     transforms = cfg["TrainReader"]["sample_transforms"]
-    if classes == ("left_palm", "right_palm") and any(item.get("RandomFlip", {}).get("prob") not in (None, 0.0) for item in transforms):
-        raise ValueError("horizontal flip must remain disabled for anatomical classes")
     letterbox_mode = any("PalmLetterBox" in item for item in transforms)
     if letterbox_mode:
-        if classes == ("left_palm", "right_palm") and not any(item.get("PalmHandednessFlip", {}).get("prob", 0.0) > 0.0 for item in transforms):
-            raise ValueError("MediaPipe-style PicoDet training requires PalmHandednessFlip")
-        if classes == ("palm", "back", "side") and not any(item.get("RandomFlip", {}).get("prob", 0.0) > 0.0 for item in transforms):
+        if not any(item.get("RandomFlip", {}).get("prob", 0.0) > 0.0 for item in transforms):
             raise ValueError("surface PicoDet training requires label-preserving horizontal flip")
         if not any("PalmLetterBox" in item for item in transforms):
             raise ValueError("MediaPipe-style PicoDet training requires PalmLetterBox")

@@ -19,35 +19,6 @@ def install_paddledetection_extensions() -> None:
     if getattr(transform, "PalmLetterBox", None) is not None:
         return
 
-    class PalmHandednessFlip(BaseOperator):
-        """Mirror image/boxes and exchange anatomical left/right class IDs."""
-
-        def __init__(self, prob: float = 0.5):
-            super().__init__()
-            if not 0.0 <= prob <= 1.0:
-                raise ValueError("prob must be in [0, 1]")
-            self.prob = float(prob)
-
-        def apply(self, sample: dict[str, Any], context: Any = None) -> dict[str, Any]:
-            if np.random.uniform() >= self.prob:
-                return sample
-            image = sample["image"]
-            width = image.shape[1]
-            sample["image"] = image[:, ::-1, :]
-            boxes = sample.get("gt_bbox")
-            if boxes is not None and len(boxes):
-                flipped = boxes.copy()
-                flipped[:, 0] = width - boxes[:, 2]
-                flipped[:, 2] = width - boxes[:, 0]
-                sample["gt_bbox"] = flipped
-            labels = sample.get("gt_class")
-            if labels is not None and len(labels):
-                if not np.isin(labels, (0, 1)).all():
-                    raise ValueError("anatomical handedness flip requires PaddleDetection labels 0 and 1")
-                sample["gt_class"] = (1 - labels).astype(labels.dtype, copy=False)
-            sample["flipped"] = True
-            return sample
-
     class PalmLetterBox(BaseOperator):
         """Center a scaled image on a fixed zero-padded canvas.
 
@@ -95,5 +66,4 @@ def install_paddledetection_extensions() -> None:
         PicoDet._forward = letterbox_forward
         PicoDet._palm_letterbox_installed = True
 
-    transform.PalmHandednessFlip = PalmHandednessFlip
     transform.PalmLetterBox = PalmLetterBox

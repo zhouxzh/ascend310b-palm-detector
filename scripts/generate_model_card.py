@@ -29,6 +29,8 @@ def main() -> int:
     num_classes = int(config["model"]["arch"]["head"]["num_classes"])
     if len(class_names) != num_classes:
         raise ValueError("config class_names and head num_classes disagree")
+    if class_names != ("palm", "back", "side"):
+        raise ValueError("only the formal palm/back/side model contract may receive a model card")
     class_table = ", ".join(f"{index + 1}={name}" for index, name in enumerate(class_names))
     head = config["model"]["arch"]["head"]
     width, height = config["data"]["val"]["input_size"]

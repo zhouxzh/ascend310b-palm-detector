@@ -21,9 +21,9 @@ https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/nanodet-plu
 ```
 
 The input size in the source checkpoint name is not the target export shape.
-Its compatible backbone/FPN weights initialize the static 320 model; the
+Its compatible backbone/FPN weights initialize the static 416 model; the
 80-class source prediction layers are shape-mismatched and are deliberately
-reinitialized for the two-class head by NanoDet's checked loader. The script
+reinitialized for the palm/back/side head by NanoDet's checked loader. The script
 records bytes and SHA-256 after download in an ignored local manifest used by
 the run launcher. The project config sets `backbone.pretrain: false` so NanoDet
 does not download an additional implicit Torch Hub ShuffleNet checkpoint.

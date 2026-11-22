@@ -119,9 +119,9 @@ def main() -> int:
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     preprocess = preprocessing_contract(config)
     run_metadata = json.loads((args.run_dir / "run.json").read_text(encoding="utf-8"))
-    classes = tuple(run_metadata.get("classes", ("left_palm", "right_palm") if int(config["num_classes"]) == 2 else ()))
-    if len(classes) != int(config["num_classes"]):
-        raise ValueError("PicoDet run metadata classes do not match config num_classes")
+    classes = tuple(run_metadata.get("classes", ()))
+    if classes != ("palm", "back", "side") or int(config["num_classes"]) != len(classes):
+        raise ValueError("PicoDet export requires the formal palm/back/side class contract")
     height, width = config["TestReader"]["inputs_def"]["image_shape"][2:]
     export_root = args.run_dir / "onnx-export"
     env = os.environ.copy()
@@ -191,11 +191,10 @@ def main() -> int:
     report_path = args.run_dir / "picodet-onnx-check.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     card = args.run_dir / "picodet-model-card.md"
-    task_name = "PicoDet Palm Surface Detector" if classes == ("palm", "back", "side") else "PicoDet Palm Detector"
     geometry = str(preprocess["geometry"])
     card.write_text(
         "\n".join([
-            f"# {task_name}",
+            "# PicoDet Palm Surface Detector",
             "",
             f"- Run: `{args.run_dir.name}`",
             "- Classes: " + ", ".join(f"`{name}`" for name in classes),

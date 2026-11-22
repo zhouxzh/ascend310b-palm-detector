@@ -31,7 +31,7 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--matrix", type=Path, default=ROOT / "configs/picodet-sweep-v001.yml")
+    parser.add_argument("--matrix", type=Path, default=ROOT / "configs/picodet-surface3-320-letterbox-v004.yml")
     args = parser.parse_args()
     matrix = yaml.safe_load(args.matrix.read_text(encoding="utf-8"))
     if not paddle.is_compiled_with_cuda() or paddle.device.cuda.device_count() != 1:
@@ -47,7 +47,7 @@ def main() -> int:
     for split in ("dev", "gate", "test"):
         if not (ROOT / matrix["validation"][split]).is_file():
             raise FileNotFoundError(f"missing {split} annotations")
-    weights = json.loads((ROOT / "artifacts/picodet-v001/pretrained/weights.json").read_text(encoding="utf-8"))["weights"]
+    weights = json.loads((ROOT / "artifacts/pretrained/picodet/weights.json").read_text(encoding="utf-8"))["weights"]
     for item in weights.values():
         path = Path(item["path"])
         if not path.is_file() or path.stat().st_size != item["bytes"] or sha256(path) != item["sha256"]:

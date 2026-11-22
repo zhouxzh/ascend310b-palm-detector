@@ -11,7 +11,7 @@ from pathlib import Path
 
 import cv2
 
-from palm_detector.labels import COCO_CATEGORY_IDS, validate_categories
+from palm_detector.labels import SURFACE_CATEGORY_IDS, validate_categories
 from palm_detector.postprocess import INPUT_HEIGHT, INPUT_WIDTH
 
 
@@ -24,7 +24,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     coco = json.loads(args.annotations.read_text(encoding="utf-8"))
-    errors = validate_categories(coco.get("categories", []))
+    errors = validate_categories(coco.get("categories", []), SURFACE_CATEGORY_IDS)
     if errors:
         raise ValueError("; ".join(errors))
     annotations_by_image = defaultdict(list)
@@ -33,7 +33,7 @@ def main() -> int:
     images = list(coco["images"])
     random.Random(args.seed).shuffle(images)
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    palette = {1: (255, 140, 0), 2: (0, 190, 255)}
+    palette = {1: (72, 180, 72), 2: (0, 190, 255), 3: (255, 140, 0)}
     written = 0
     for image_info in images:
         if written >= args.limit:
@@ -50,7 +50,7 @@ def main() -> int:
             x2, y2 = round((x + width) * INPUT_WIDTH / original_width), round((y + height) * INPUT_HEIGHT / original_height)
             color = palette[category_id]
             cv2.rectangle(resized, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(resized, COCO_CATEGORY_IDS[category_id], (x1, max(14, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
+            cv2.putText(resized, SURFACE_CATEGORY_IDS[category_id], (x1, max(14, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
         output = args.output_dir / f"{written:04d}_image-{image_info['id']}.jpg"
         if not cv2.imwrite(str(output), resized):
             raise RuntimeError(f"failed to write {output}")

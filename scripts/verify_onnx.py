@@ -22,7 +22,7 @@ def main() -> int:
     parser.add_argument("--onnx", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--config", type=Path, help="Training config; determines input, head strides and reg_max")
-    parser.add_argument("--num-classes", type=int, default=2, help="Legacy standalone verification, defaults to two classes")
+    parser.add_argument("--num-classes", type=int, default=3, help="Standalone verification defaults to the palm/back/side contract")
     args = parser.parse_args()
     if args.config:
         config = yaml.safe_load(args.config.read_text(encoding="utf-8"))

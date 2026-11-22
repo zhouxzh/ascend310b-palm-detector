@@ -8,7 +8,7 @@ import numpy as np
 
 
 def install_nanodet_extensions() -> None:
-    """Install a fixed-canvas LetterBox transform with anatomical class swaps."""
+    """Install the fixed-canvas LetterBox transform used by surface models."""
     from nanodet.data.transform import pipeline, warp
 
     if getattr(warp.ShapeTransform, "_palm_letterbox_installed", False):
@@ -20,7 +20,6 @@ def install_nanodet_extensions() -> None:
 
     def patched_init(self: Any, keep_ratio: bool, *args: Any, **kwargs: Any) -> None:
         self.palm_letterbox = bool(kwargs.pop("palm_letterbox", False))
-        self.swap_handedness_on_flip = bool(kwargs.pop("swap_handedness_on_flip", False))
         original_init(self, keep_ratio, *args, **kwargs)
 
     def patched_call(self: Any, meta_data: dict[str, Any], dst_shape: tuple[int, int]) -> dict[str, Any]:
@@ -67,11 +66,6 @@ def install_nanodet_extensions() -> None:
                 warp.cv2.warpPerspective(mask_item, matrix, dsize=(target_width, target_height))
                 for mask_item in meta_data["gt_masks"]
             ]
-        if flip[0, 0] < 0 and self.swap_handedness_on_flip and len(meta_data.get("gt_labels", ())):
-            labels = np.asarray(meta_data["gt_labels"])
-            if not np.isin(labels, (0, 1)).all():
-                raise ValueError("anatomical handedness flip requires NanoDet labels 0 and 1")
-            meta_data["gt_labels"] = (1 - labels).astype(labels.dtype, copy=False)
         return meta_data
 
     def patched_pipeline_call(self: Any, dataset: Any, meta: dict[str, Any], dst_shape: tuple[int, int]) -> dict[str, Any]:
