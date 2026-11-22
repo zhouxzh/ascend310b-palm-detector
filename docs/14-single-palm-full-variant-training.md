@@ -8,7 +8,7 @@ The source labels are the human-confirmed `palm`/`back`/`side` annotations.
 `side` box is excluded. This ensures that the single-class detector is not
 trained to treat a visible side hand as background.
 
-The matrix contains 50 tasks, all using seed 42, fixed subject-disjoint splits,
+The matrix contains 78 tasks, all using seed 42, fixed subject-disjoint splits,
 development-set checkpoint selection, early stopping after eight validation
 checks without a 0.001 mAP improvement, ONNX export, framework/ONNX agreement,
 and one final frozen-test evaluation:
@@ -16,7 +16,7 @@ and one final frozen-test evaluation:
 | Family | Variants | Geometry | Tasks |
 | --- | ---: | --- | ---: |
 | NanoDet | 16 upstream configurations | LetterBox and direct stretch | 32 |
-| PicoDet-LCNet | XS/S/M/L at supported input sizes | LetterBox and direct stretch | 18 |
+| PicoDet | LCNet XS/S/M/L plus legacy ESNet and documented COCO backbone extensions | LetterBox and direct stretch | 46 |
 
 Direct-stretch tasks use the same augmentations as LetterBox tasks except for
 geometry. Random anisotropic stretch remains disabled because direct resize

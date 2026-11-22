@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download and checksum the exact LCNet weights used by surface PicoDet runs."""
+"""Download and checksum the exact pretrained weights used by PicoDet matrices."""
 
 from __future__ import annotations
 
