@@ -31,6 +31,7 @@ def configure(source: dict, variant: dict, matrix: dict, dataset: Path, geometry
     if classes != ["palm_surface"]:
         raise ValueError("single-palm NanoDet matrix must define exactly palm_surface")
     head = config["model"]["arch"]["head"]
+    backbone = config["model"]["arch"]["backbone"]
     source_batch = int(config["device"]["batchsize_per_gpu"])
     batch_size = int(variant["batch_size"])
     if source_batch < 1 or batch_size < 1:
@@ -38,6 +39,11 @@ def configure(source: dict, variant: dict, matrix: dict, dataset: Path, geometry
     head["num_classes"] = len(classes)
     if "aux_head" in config["model"]["arch"]:
         config["model"]["arch"]["aux_head"]["num_classes"] = len(classes)
+    # The verified local checkpoint is the only weight source. Upstream recipes
+    # can otherwise issue an unrelated online backbone download before it loads.
+    for key in ("pretrain", "pretrained"):
+        if key in backbone:
+            backbone[key] = False
     for split, annotations in (("train", "instances_train.json"), ("val", "instances_dev.json")):
         target = config["data"][split]
         target["img_path"] = str(dataset / "images")

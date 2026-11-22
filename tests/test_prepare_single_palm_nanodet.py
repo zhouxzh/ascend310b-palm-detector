@@ -15,7 +15,7 @@ class PrepareSinglePalmNanoDetTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         source = {
-            "model": {"arch": {"head": {"num_classes": 80}, "aux_head": {"num_classes": 80}}},
+            "model": {"arch": {"backbone": {"pretrain": True}, "head": {"num_classes": 80}, "aux_head": {"num_classes": 80}}},
             "data": {
                 "train": {"img_path": "old", "ann_path": "old", "input_size": [320, 320], "keep_ratio": True, "pipeline": {"normalize": [[1, 2, 3], [4, 5, 6]]}},
                 "val": {"img_path": "old", "ann_path": "old", "input_size": [320, 320], "keep_ratio": True, "pipeline": {"normalize": [[1, 2, 3], [4, 5, 6]]}},
@@ -28,6 +28,7 @@ class PrepareSinglePalmNanoDetTest(unittest.TestCase):
         self.assertEqual(configured["class_names"], ["palm_surface"])
         self.assertEqual(configured["model"]["arch"]["head"]["num_classes"], 1)
         self.assertEqual(configured["model"]["arch"]["aux_head"]["num_classes"], 1)
+        self.assertFalse(configured["model"]["arch"]["backbone"]["pretrain"])
         self.assertTrue(configured["data"]["train"]["pipeline"]["palm_letterbox"])
         self.assertFalse(configured["data"]["train"]["keep_ratio"])
         self.assertEqual(configured["schedule"]["optimizer"]["lr"], 0.16)
