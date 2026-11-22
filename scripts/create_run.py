@@ -18,6 +18,16 @@ import yaml
 from palm_detector.dataset_contract import sha256_file
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_PLACEHOLDERS = frozenset({".run.lock", ".training.lock", "train.log"})
+
+
+def is_reusable_run_directory(path: Path) -> bool:
+    """Allow a controller-created directory before immutable run files exist."""
+    if not path.exists():
+        return True
+    if not path.is_dir():
+        return False
+    return all(item.name in RUNTIME_PLACEHOLDERS for item in path.iterdir())
 
 
 def _git(command: list[str]) -> str | None:
@@ -65,7 +75,7 @@ def main() -> int:
     if any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_." for character in args.run_id):
         parser.error("run id may contain only letters, digits, '-', '_', and '.'")
     run_dir = args.runs_root.resolve() / args.run_id
-    if run_dir.exists():
+    if not is_reusable_run_directory(run_dir):
         parser.error(f"run directory already exists: {run_dir}")
     if not args.pretrained_checkpoint.is_file() or not args.pretrained_manifest.is_file() or not args.data_report.is_file():
         parser.error("pretrained checkpoint, pretrained manifest, and data report must exist")
@@ -77,7 +87,7 @@ def main() -> int:
     config = yaml.safe_load(base_bytes)
     config["save_dir"] = str(run_dir.relative_to(ROOT))
     config.setdefault("schedule", {})["load_model"] = str(args.pretrained_checkpoint.resolve())
-    run_dir.mkdir(parents=True)
+    run_dir.mkdir(parents=True, exist_ok=True)
     config_path = run_dir / "config.yml"
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     annotation_hashes = {}

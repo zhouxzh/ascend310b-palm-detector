@@ -159,7 +159,7 @@ run_nanodet_locked() {
     return 1
   fi
   record_state nanodet "$geometry" "$variant" running "$run_dir"
-  if [[ ! -d "$run_dir" ]]; then
+  if [[ ! -f "$run_dir/config.yml" ]]; then
     if ! PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/create_run.py \
       --base-config "$config" --run-id "$run_id" --runs-root "$NANO_RUNS" \
       --pretrained-checkpoint "$checkpoint" --pretrained-manifest "$manifest" --data-report "$DATA_AUDIT" --seed 42; then

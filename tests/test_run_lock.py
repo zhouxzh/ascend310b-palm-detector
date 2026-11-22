@@ -42,3 +42,7 @@ class RunLockTest(unittest.TestCase):
             first.close()
             self.assertEqual(waiting.wait(timeout=5), 0)
             self.assertTrue(marker.is_file())
+
+    def test_controller_creates_a_run_when_only_lock_files_exist(self) -> None:
+        source = (Path(__file__).resolve().parents[1] / "scripts" / "run_single_palm_all_variants.sh").read_text(encoding="utf-8")
+        self.assertIn('if [[ ! -f "$run_dir/config.yml" ]]; then', source)
