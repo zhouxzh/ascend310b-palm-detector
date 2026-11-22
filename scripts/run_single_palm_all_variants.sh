@@ -120,6 +120,20 @@ with_run_lock() {
   return "$status"
 }
 
+with_picodet_pipeline_lock() {
+  local pico_lock_fd
+  exec {pico_lock_fd}>"$EXPERIMENT_ROOT/.picodet-pipeline.lock"
+  flock -x "$pico_lock_fd"
+  local status=0
+  if "$@"; then
+    status=0
+  else
+    status=$?
+  fi
+  exec {pico_lock_fd}>&-
+  return "$status"
+}
+
 run_nanodet() {
   local geometry="$1"
   local variant="$2"
@@ -257,7 +271,7 @@ run_picodet_matrix() {
   while IFS=$'\t' read -r variant size; do
     local run_dir="$PICO_RUNS/single-palm-v001-${geometry}-${variant}-seed-42"
     record_state picodet "$geometry" "$variant" running "$run_dir"
-    if ! with_run_lock "$run_dir" run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
+    if ! with_run_lock "$run_dir" with_picodet_pipeline_lock run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
       refresh_comparison
       continue
     fi
