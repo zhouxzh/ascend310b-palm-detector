@@ -43,7 +43,7 @@ variants:
   - {id: picodet-s-320, config: configs/picodet/picodet_s_320_coco_lcnet.yml, input_size: 320, batch_size: 64, reference_lr: 0.32, epochs: 300, pretrained: lcnet-x075}
   - {id: picodet-s-416, config: configs/picodet/picodet_s_416_coco_lcnet.yml, input_size: 416, batch_size: 64, reference_lr: 0.32, epochs: 300, pretrained: lcnet-x075}
   - {id: picodet-m-320, config: configs/picodet/picodet_m_320_coco_lcnet.yml, input_size: 320, batch_size: 48, reference_lr: 0.24, epochs: 300, pretrained: lcnet-x15}
-  - {id: picodet-m-416, config: configs/picodet/picodet_m_416_coco_lcnet.yml, input_size: 416, batch_size: 48, reference_lr: 0.24, epochs: 300, pretrained: lcnet-x15}
+  - {id: picodet-m-416, config: configs/picodet/picodet_m_416_coco_lcnet.yml, input_size: 416, batch_size: 32, reference_batch_size: 48, reference_lr: 0.24, epochs: 300, pretrained: lcnet-x15}
   - {id: picodet-l-320, config: configs/picodet/picodet_l_320_coco_lcnet.yml, input_size: 320, batch_size: 24, reference_lr: 0.12, epochs: 250, pretrained: lcnet-x20}
   - {id: picodet-l-416, config: configs/picodet/picodet_l_416_coco_lcnet.yml, input_size: 416, batch_size: 24, reference_lr: 0.12, epochs: 250, pretrained: lcnet-x20}
   - {id: picodet-l-640, config: configs/picodet/picodet_l_640_coco_lcnet.yml, input_size: 640, batch_size: 12, reference_lr: 0.06, epochs: 250, pretrained: lcnet-x20}

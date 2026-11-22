@@ -56,3 +56,8 @@ PicoDet pipelines use two shared GPU slots by default. This cap was validated
 with two PicoDet M-320 runs plus two NanoDet runs at about 22.3 GiB of 32.6
 GiB GPU memory; four concurrent PicoDet jobs previously exhausted memory.
 Set `SINGLE_PALM_PICODET_PARALLELISM=1` for conservative serial recovery.
+
+The 416-pixel PicoDet-M recipe uses a microbatch of 32 rather than its 48-image
+reference microbatch because 48 overflowed the available GPU memory alongside
+the planned NanoDet lanes. Its learning rate is linearly scaled from 0.06 to
+0.04, and this exact recipe is shared by LetterBox and direct-stretch runs.

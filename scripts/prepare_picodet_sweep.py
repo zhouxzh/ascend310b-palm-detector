@@ -34,6 +34,9 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
     size = int(item["input_size"])
     pretrained = matrix["pretrained"][item["pretrained"]]
     microbatch = int(item["batch_size"])
+    reference_batch = int(item.get("reference_batch_size", microbatch))
+    if microbatch < 1 or reference_batch < 1:
+        raise ValueError("PicoDet microbatch and reference batch must be positive")
     sampling = matrix.get("sampling", {})
     train_annotations = str(sampling.get("train_annotations", "annotations/instances_train.json"))
     preprocessing = matrix.get("preprocessing", {})
@@ -124,7 +127,13 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
             ],
             "batch_size": 1,
         },
-        "LearningRate": {"base_lr": round(item["reference_lr"] * matrix["single_gpu_count"] / matrix["reference_gpu_count"], 8)},
+        "LearningRate": {
+            "base_lr": round(
+                item["reference_lr"] * microbatch / reference_batch
+                * matrix["single_gpu_count"] / matrix["reference_gpu_count"],
+                8,
+            )
+        },
         "pretrain_weights": str((ROOT / "artifacts/pretrained/picodet" / pretrained["filename"]).resolve()),
     }
     return {
@@ -135,7 +144,7 @@ def build_config(item: dict, matrix: dict, upstream_root: Path) -> dict:
         "input_size": item["input_size"],
         "epochs": item["epochs"],
         "batch_size": microbatch,
-        "reference_batch": item["batch_size"],
+        "reference_batch": reference_batch,
         "reference_lr": item["reference_lr"],
         "reference_gpu_count": matrix["reference_gpu_count"],
         "single_gpu_count": matrix["single_gpu_count"],
