@@ -47,6 +47,11 @@ tmp.replace(path)
 PY
 }
 
+refresh_comparison() {
+  PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/summarize_single_palm_models.py \
+    --experiment-root "$EXPERIMENT_ROOT" --output "$EXPERIMENT_ROOT/interim-comparison.json"
+}
+
 run_nanodet() {
   local geometry="$1"
   local variant="$2"
@@ -107,6 +112,7 @@ run_nanodet() {
     fi
   fi
   record_state nanodet "$geometry" "$variant" complete "$run_dir"
+  refresh_comparison
 }
 
 run_picodet_postprocess() {
@@ -144,6 +150,7 @@ run_picodet_postprocess() {
     fi
   fi
   record_state picodet "$geometry" "$variant" complete "$run_dir"
+  refresh_comparison
 }
 
 run_picodet_matrix() {
@@ -164,9 +171,10 @@ run_picodet_matrix() {
       --inventory "$inventory" --state "$state" --runs-root "$PICO_RUNS" \
       --run-prefix "single-palm-v001-${geometry}" --only "$variant" --seed 42; then
       record_state picodet "$geometry" "$variant" failed "$run_dir" "training failed"
+      refresh_comparison
       continue
     fi
-    run_picodet_postprocess "$geometry" "$variant" "$run_dir" || true
+    run_picodet_postprocess "$geometry" "$variant" "$run_dir" || refresh_comparison
   done < <(MATRIX="$matrix" conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import os
 import yaml
@@ -196,7 +204,7 @@ for geometry in letterbox direct_stretch; do
     mv "$config_root/../variant-inventory.json" "$inventory"
   fi
   while IFS=$'\t' read -r variant config checkpoint manifest; do
-    run_nanodet "$geometry" "$variant" "$config" "$checkpoint" "$manifest" || true
+    run_nanodet "$geometry" "$variant" "$config" "$checkpoint" "$manifest" || refresh_comparison
   done < <(INVENTORY="$inventory" conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import json
 import os
