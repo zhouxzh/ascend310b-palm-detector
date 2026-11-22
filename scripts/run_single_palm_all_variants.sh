@@ -107,8 +107,9 @@ with_run_lock() {
   local run_dir="$1"
   shift
   local run_lock_fd
-  mkdir -p "$run_dir"
-  exec {run_lock_fd}>"$run_dir/.run.lock"
+  local lock_root="$EXPERIMENT_ROOT/.run-locks"
+  mkdir -p "$lock_root"
+  exec {run_lock_fd}>"$lock_root/$(basename "$run_dir").lock"
   flock -x "$run_lock_fd"
   local status=0
   if "$@"; then

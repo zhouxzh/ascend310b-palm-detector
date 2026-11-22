@@ -46,3 +46,5 @@ class RunLockTest(unittest.TestCase):
     def test_controller_creates_a_run_when_only_lock_files_exist(self) -> None:
         source = (Path(__file__).resolve().parents[1] / "scripts" / "run_single_palm_all_variants.sh").read_text(encoding="utf-8")
         self.assertIn('if [[ ! -f "$run_dir/config.yml" ]]; then', source)
+        self.assertIn('local lock_root="$EXPERIMENT_ROOT/.run-locks"', source)
+        self.assertNotIn('exec {run_lock_fd}>"$run_dir/.run.lock"', source)
