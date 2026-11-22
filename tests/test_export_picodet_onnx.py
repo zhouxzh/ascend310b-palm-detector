@@ -70,6 +70,26 @@ class ExportPicoDetOnnxTest(unittest.TestCase):
             self.assertEqual(scales, ["0.a_f32"] * 4)
             self.assertEqual((root / "conversion/model.pdiparams").read_bytes(), b"params")
 
+    def test_pir_converter_accepts_architectures_with_a_nonstandard_number_of_scales(self) -> None:
+        path = Path(__file__).resolve().parents[1] / "scripts/export_picodet_onnx.py"
+        spec = importlib.util.spec_from_file_location("export_picodet_onnx_variable_scales", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        payload = {
+            "program": {"regions": [{"blocks": [{"ops": [
+                {"#": "1.nearest_interp", "A": [{"N": "scale", "AT": {"D": [
+                    {"#": "0.a_f64", "D": 2.0}, {"#": "0.a_f64", "D": 2.0}
+                ]}}]},
+            ]}]}]}
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model = root / "model.json"
+            (root / "model.pdiparams").write_bytes(b"params")
+            model.write_text(json.dumps(payload), encoding="utf-8")
+            _, patch_count = module.prepare_pir_for_paddle2onnx(model, root / "conversion")
+            self.assertEqual(patch_count, 2)
+
     def test_preprocessing_contract_supports_direct_stretch_without_letterbox(self) -> None:
         path = Path(__file__).resolve().parents[1] / "scripts/export_picodet_onnx.py"
         spec = importlib.util.spec_from_file_location("export_picodet_onnx_stretch", path)

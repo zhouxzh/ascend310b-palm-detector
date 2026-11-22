@@ -100,8 +100,8 @@ def prepare_pir_for_paddle2onnx(model_file: Path, conversion_dir: Path) -> tuple
                 if value.get("#") == "0.a_f64" and value.get("D") == 2.0:
                     value["#"] = "0.a_f32"
                     patched += 1
-    if patched != 4:
-        raise ValueError(f"expected four PicoDet float64 resize scales, patched {patched}")
+    if patched == 0:
+        raise ValueError("PicoDet conversion model contains no float64 nearest-interpolation scales to patch")
     converted_model.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     return converted_model, patched
 
