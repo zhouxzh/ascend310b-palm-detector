@@ -32,7 +32,13 @@ from nanodet.trainer.task import TrainingTask
 from nanodet.util import NanoDetLightningLogger, cfg, convert_old_model, load_config, load_model_weight
 
 
-METRIC_PATTERN = re.compile(r"Val_metrics: .*?'mAP': np\.float64\(([^)]+)\)")
+# NanoDet logs have used both a native float and ``np.float64(...)`` for mAP
+# across supported PyTorch/NumPy combinations. Resume must preserve the same
+# early-stop history in either case.
+METRIC_PATTERN = re.compile(
+    r"Val_metrics: .*?'mAP': (?:np\.float64\()?"
+    r"([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)\)?"
+)
 
 
 def _completed(save_dir: Path) -> bool:
@@ -62,7 +68,10 @@ def _historical_bad_checks(train_log: Path, best_metric: float, min_delta: float
     values = [float(match.group(1)) for match in METRIC_PATTERN.finditer(train_log.read_text(encoding="utf-8", errors="replace"))]
     bad_checks = 0
     for value in reversed(values):
-        if value > best_metric + min_delta:
+        # Do not count the validation that established the retained best
+        # checkpoint itself. A genuinely newer, better value instead exposes
+        # stale checkpoint metadata and also bounds this historical scan.
+        if abs(value - best_metric) <= 1e-12 or value > best_metric + min_delta:
             break
         bad_checks += 1
     return bad_checks
