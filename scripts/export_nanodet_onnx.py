@@ -28,8 +28,11 @@ def _export(model, dummy: torch.Tensor, output: Path, opset_version: int) -> Non
     )
 
 
-def export_with_compatible_opset(model, dummy: torch.Tensor, output: Path) -> int:
+def export_with_compatible_opset(model, dummy: torch.Tensor, output: Path, preferred_opset: int = 11) -> int:
     """Keep the deployment-friendly opset 11 unless a backbone requires 13."""
+    if preferred_opset == 13:
+        _export(model, dummy, output, opset_version=13)
+        return 13
     try:
         _export(model, dummy, output, opset_version=11)
         return 11
@@ -55,7 +58,11 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     load_model_weight(model, checkpoint, Logger(-1, str(args.output.parent), False))
     dummy = torch.randn(1, 3, input_height, input_width)
-    opset_version = export_with_compatible_opset(model, dummy, args.output)
+    # TAN contains a transformer reshape path that materializes aten::unflatten.
+    # ONNX only supports it from opset 13 onward.
+    fpn_name = str(cfg.model.arch.get("fpn", {}).get("name", ""))
+    preferred_opset = 13 if fpn_name == "TAN" else 11
+    opset_version = export_with_compatible_opset(model, dummy, args.output, preferred_opset)
     simplified, success = onnxsim.simplify(str(args.output), input_data={"data": dummy.numpy()})
     if not success:
         raise RuntimeError("ONNX simplification failed")

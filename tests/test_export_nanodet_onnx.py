@@ -18,3 +18,4 @@ class ExportNanoDetOnnxTest(unittest.TestCase):
         self.assertIn("opset_version=11", function_source)
         self.assertIn("aten::unflatten", function_source)
         self.assertIn("opset_version=13", function_source)
+        self.assertIn('fpn_name == "TAN"', source)
