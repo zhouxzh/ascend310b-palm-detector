@@ -25,14 +25,14 @@ record_state() {
   local status="$4"
   local run_dir="$5"
   local detail="${6:-}"
-  FAMILY="$family" GEOMETRY="$geometry" VARIANT="$variant" STATUS="$status" RUN_DIR="$run_dir" DETAIL="$detail" STATE="$STATE" \
+  FAMILY="$family" GEOMETRY="$geometry" VARIANT="$variant" STATUS="$status" RUN_DIR="$run_dir" DETAIL="$detail" TRAINING_STATE_PATH="$STATE" \
     PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-path = Path(os.environ["STATE"])
+path = Path(os.environ["TRAINING_STATE_PATH"])
 payload = json.loads(path.read_text()) if path.is_file() else {"schema_version": 1, "tasks": {}}
 key = ":".join(os.environ[name] for name in ("FAMILY", "GEOMETRY", "VARIANT"))
 payload["tasks"][key] = {
