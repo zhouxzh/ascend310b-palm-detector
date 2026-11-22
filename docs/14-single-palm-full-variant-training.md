@@ -51,3 +51,8 @@ Each run retries from its existing checkpoint up to three times after an
 interrupted training, export, or validation stage. Change the limit or delay
 with `SINGLE_PALM_MAX_RUN_ATTEMPTS` and `SINGLE_PALM_RETRY_DELAY_SECONDS`; a
 task is marked failed only after all attempts are exhausted.
+
+PicoDet pipelines use two shared GPU slots by default. This cap was validated
+with two PicoDet M-320 runs plus two NanoDet runs at about 22.3 GiB of 32.6
+GiB GPU memory; four concurrent PicoDet jobs previously exhausted memory.
+Set `SINGLE_PALM_PICODET_PARALLELISM=1` for conservative serial recovery.

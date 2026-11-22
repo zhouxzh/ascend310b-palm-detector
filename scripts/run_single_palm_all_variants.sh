@@ -19,6 +19,7 @@ readonly PICO_SWEEP_STATE_PREFIX="${SINGLE_PALM_PICO_SWEEP_STATE_PREFIX:-$PICO_R
 readonly TEST_ANNOTATIONS="$DATASET/annotations/instances_test.json"
 readonly MAX_RUN_ATTEMPTS="${SINGLE_PALM_MAX_RUN_ATTEMPTS:-3}"
 readonly RETRY_DELAY_SECONDS="${SINGLE_PALM_RETRY_DELAY_SECONDS:-30}"
+readonly PICO_PIPELINE_SLOTS="${SINGLE_PALM_PICODET_PARALLELISM:-2}"
 
 usage() {
   cat <<'EOF'
@@ -78,6 +79,13 @@ if ! [[ "$RETRY_DELAY_SECONDS" =~ ^(0|[1-9][0-9]*)$ ]]; then
   printf 'SINGLE_PALM_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2
   exit 2
 fi
+case "$PICO_PIPELINE_SLOTS" in
+  1|2) ;;
+  *)
+    printf 'SINGLE_PALM_PICODET_PARALLELISM must be 1 or 2\n' >&2
+    exit 2
+    ;;
+esac
 
 record_state() {
   local family="$1"
@@ -158,18 +166,24 @@ with_run_lock() {
   return "$status"
 }
 
-with_picodet_pipeline_lock() {
-  local pico_lock_fd
-  exec {pico_lock_fd}>"$EXPERIMENT_ROOT/.picodet-pipeline.lock"
-  flock -x "$pico_lock_fd"
-  local status=0
-  if "$@"; then
-    status=0
-  else
-    status=$?
-  fi
-  exec {pico_lock_fd}>&-
-  return "$status"
+with_picodet_pipeline_slot() {
+  local slot pico_slot_fd status
+  while true; do
+    for ((slot = 1; slot <= PICO_PIPELINE_SLOTS; slot += 1)); do
+      exec {pico_slot_fd}>"$EXPERIMENT_ROOT/.picodet-pipeline-slot-${slot}.lock"
+      if flock -n "$pico_slot_fd"; then
+        if "$@"; then
+          status=0
+        else
+          status=$?
+        fi
+        exec {pico_slot_fd}>&-
+        return "$status"
+      fi
+      exec {pico_slot_fd}>&-
+    done
+    sleep 2
+  done
 }
 
 run_nanodet() {
@@ -311,7 +325,7 @@ run_picodet_matrix() {
     local run_dir="$PICO_RUNS/single-palm-v001-${geometry}-${variant}-seed-42"
     record_state picodet "$geometry" "$variant" queued "$run_dir"
     if ! run_with_retries picodet "$geometry" "$variant" "$run_dir" \
-      with_run_lock "$run_dir" with_picodet_pipeline_lock run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
+      with_run_lock "$run_dir" with_picodet_pipeline_slot run_picodet_variant "$geometry" "$variant" "$run_dir" "$inventory" "$state"; then
       refresh_comparison
       continue
     fi

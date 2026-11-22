@@ -55,3 +55,10 @@ class RunLockTest(unittest.TestCase):
         self.assertIn('run_with_retries()', source)
         self.assertIn('record_state "$family" "$geometry" "$variant" retrying', source)
         self.assertIn('failed after ${attempt}/${MAX_RUN_ATTEMPTS} attempts', source)
+
+    def test_controller_limits_picodet_to_two_pipeline_slots(self) -> None:
+        source = (Path(__file__).resolve().parents[1] / "scripts" / "run_single_palm_all_variants.sh").read_text(encoding="utf-8")
+        self.assertIn('readonly PICO_PIPELINE_SLOTS="${SINGLE_PALM_PICODET_PARALLELISM:-2}"', source)
+        self.assertIn('with_picodet_pipeline_slot()', source)
+        self.assertIn('.picodet-pipeline-slot-${slot}.lock', source)
+        self.assertNotIn('with_picodet_pipeline_lock()', source)
