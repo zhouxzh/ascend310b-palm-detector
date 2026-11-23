@@ -3,6 +3,11 @@
 This experiment defines one class, `palm_surface`, for direct palm-region
 detection. It is separate from the formal three-class palm-surface model.
 
+> Historical plan. This 78-task matrix produced the existing baseline and
+> LetterBox-versus-direct-stretch evidence. New work follows the reduced
+> NanoDet-Plus LetterBox scope in
+> [15-revised-nanodet-plus-letterbox-training.md](15-revised-nanodet-plus-letterbox-training.md).
+
 The source labels are the human-confirmed `palm`/`back`/`side` annotations.
 `palm` and `back` boxes become `palm_surface`; every image that contains a
 `side` box is excluded. This ensures that the single-class detector is not
