@@ -16,15 +16,17 @@ SNAPSHOT_ROOT = RUN_ROOT / "snapshots"
 INTERVAL_SECONDS = 600
 PATTERNS = (
     "summary.json",
+    "tuning-summary.json",
+    "final-summary.json",
     "matrix-events.jsonl",
     "MATRIX_COMPLETE",
     "supervisor.json",
-    "logs/*.log",
-    "*/status.json",
-    "*/metrics.json",
-    "*/inference-contract.json",
-    "*/best.pt",
-    "*/last.pt",
+    "logs/**/*.log",
+    "**/status.json",
+    "**/metrics.json",
+    "**/inference-contract.json",
+    "**/best.pt",
+    "**/last.pt",
     "tensorboard/**/*",
 )
 
@@ -33,7 +35,13 @@ def collect() -> list[Path]:
     files: list[Path] = []
     for pattern in PATTERNS:
         files.extend(path for path in RUN_ROOT.glob(pattern) if path.is_file())
-    return sorted(set(files), key=lambda path: str(path))
+    selected = set(files)
+    # Search checkpoints are reproducible trial artifacts; keep final checkpoints.
+    selected = {
+        path for path in selected
+        if not ("search" in path.parts and path.name in {"best.pt", "last.pt"})
+    }
+    return sorted(selected, key=lambda path: str(path))
 
 
 def write_state(payload: dict) -> None:
