@@ -100,19 +100,31 @@ conda run -n torch python scripts/train_palm_reject_classifier.py \
   --output artifacts/palm-reject-lcnet-100
 ```
 
-Run the full three-model matrix detached with TensorBoard:
+Run the hyperparameter search and final three-model matrix detached:
 
 ```bash
-nohup bash scripts/start_palm_reject_training_ace2.sh \
-  > artifacts/palm-reject-training-launcher.log 2>&1 &
-tensorboard --logdir artifacts/20261123-palm-reject-three-backbones/tensorboard \
-  --host 0.0.0.0 --port 6006
+nohup bash scripts/start_palm_reject_optimization_ace2.sh \
+  > artifacts/palm-reject-optimization-launcher.log 2>&1 &
 ```
+
+The search evaluates four learning-rate, weight-decay, and label-smoothing
+configurations per backbone. It selects by validation ROC-AUC without evaluating
+the test split. The final run then evaluates test once. The operational
+calibration maximizes palm recall subject to a configurable false-accept limit
+for reject samples; the default is `reject -> palm <= 2%`.
+
+The `realistic` augmentation profile combines mild affine and perspective
+changes, photometric distortion, Gaussian blur, sharpness changes, JPEG
+compression, grayscale, and horizontal flip. It does not randomly remove the
+palm region so the positive class remains consistent with the annotation rule.
+
+TensorBoard is served on port `6010`. The latest result snapshot and downloadable
+files are served on port `6011`; snapshots are refreshed every 600 seconds.
 
 The dataset is stored in `data/palm-reject-roi-v005`. Each model run writes its
 best/last checkpoint, epoch status, TensorBoard events, frozen validation/test
 metrics, and inference contract below
-`artifacts/20261123-palm-reject-three-backbones/`.
+`artifacts/20261123-palm-reject-aug-optimization/`.
 
 ## Formal Workflows
 

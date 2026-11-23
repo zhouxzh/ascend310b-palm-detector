@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path("/home/zhong/Documents/ascend310b-palm-detector")
-RUN_ROOT = ROOT / "artifacts/20261123-palm-reject-three-backbones"
+RUN_ID = os.environ.get("PALMPRINT_CLASSIFIER_RUN_ID", "20261123-palm-reject-three-backbones")
+RUN_ROOT = ROOT / "artifacts" / RUN_ID
 SNAPSHOT_ROOT = RUN_ROOT / "snapshots"
 INTERVAL_SECONDS = 600
 PATTERNS = (
