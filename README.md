@@ -126,6 +126,21 @@ best/last checkpoint, epoch status, TensorBoard events, frozen validation/test
 metrics, and inference contract below
 `artifacts/20261123-palm-reject-aug-optimization/`.
 
+Export and numerically verify the selected checkpoint against real test ROIs:
+
+```bash
+conda run -n torch python scripts/export_palm_reject_classifier_onnx.py \
+  --checkpoint artifacts/20261123-palm-reject-aug-optimization/final/efficientnet-b0/best.pt \
+  --output artifacts/20261123-palm-reject-aug-optimization/onnx/palm-reject-efficientnet-b0.onnx \
+  --metadata artifacts/20261123-palm-reject-aug-optimization/onnx/palm-reject-efficientnet-b0.metadata.json \
+  --metrics artifacts/20261123-palm-reject-aug-optimization/final/efficientnet-b0/metrics.json \
+  --dataset data/palm-reject-roi-v005
+```
+
+The exporter checks the ONNX graph, compares PyTorch and ONNX Runtime outputs on
+32 real test ROIs, and records argmax and threshold-decision agreement. It does
+not run ATC or claim Ascend 310B admission.
+
 ## Formal Workflows
 
 ```bash
