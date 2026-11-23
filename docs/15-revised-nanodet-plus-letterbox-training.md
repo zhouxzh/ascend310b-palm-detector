@@ -39,3 +39,13 @@ The final model selection report ranks these five frozen-test mAP50-95 values.
 The earlier completed matched direct-stretch runs remain evidence for the
 preprocessing decision, but are not a reason to schedule further direct-stretch
 training.
+
+Generate the scoped report with:
+
+```bash
+PYTHONPATH=src conda run --no-capture-output -n palm-nanodet \
+  python scripts/summarize_single_palm_models.py \
+  --experiment-root artifacts/single-palm-v001 \
+  --scope configs/nanodet-plus-letterbox-scope-v001.json \
+  --output artifacts/single-palm-v001/final-nanodet-plus-letterbox-v001.json
+```

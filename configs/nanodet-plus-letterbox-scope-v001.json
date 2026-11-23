@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "nanodet-plus-letterbox-v001",
+  "tasks": [
+    {"family": "nanodet", "geometry": "letterbox", "variant": "plus-m-320"},
+    {"family": "nanodet", "geometry": "letterbox", "variant": "plus-m15-320"},
+    {"family": "nanodet", "geometry": "letterbox", "variant": "plus-m-416"},
+    {"family": "nanodet", "geometry": "letterbox", "variant": "plus-m15-416"},
+    {"family": "nanodet", "geometry": "letterbox", "variant": "plus-convnext-nano-640"}
+  ]
+}

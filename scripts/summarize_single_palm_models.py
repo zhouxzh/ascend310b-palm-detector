@@ -14,6 +14,33 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def result_key(item: dict) -> tuple[str, str, str]:
+    return item["framework"].lower(), item["geometry"], item["variant"]
+
+
+def expected_tasks(root: Path, scope: Path | None) -> set[tuple[str, str, str]]:
+    if scope is not None:
+        payload = read_json(scope)
+        tasks = payload.get("tasks", [])
+        expected = {
+            (str(item["family"]), str(item["geometry"]), str(item["variant"]))
+            for item in tasks
+        }
+        if not expected:
+            raise ValueError(f"scope contains no tasks: {scope}")
+        return expected
+
+    expected: set[tuple[str, str, str]] = set()
+    for family in ("nanodet", "picodet"):
+        for geometry in ("letterbox", "direct_stretch"):
+            inventory_path = root / family / f"variant-inventory-{geometry}.json"
+            if not inventory_path.is_file():
+                continue
+            for item in read_json(inventory_path).get("variants", []):
+                expected.add((family, geometry, item["id"]))
+    return expected
+
+
 def write_text_atomically(path: Path, text: str) -> None:
     """Publish a report without exposing a partially-written file to another lane."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,26 +257,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--scope", type=Path, help="optional task-scope JSON")
     args = parser.parse_args()
     root = args.experiment_root.resolve()
     state_path = root / "training-state.json"
     state = read_json(state_path) if state_path.is_file() else {"tasks": {}}
-    expected: set[tuple[str, str, str]] = set()
-    for family in ("nanodet", "picodet"):
-        for geometry in ("letterbox", "direct_stretch"):
-            inventory_path = root / family / f"variant-inventory-{geometry}.json"
-            if not inventory_path.is_file():
-                continue
-            for item in read_json(inventory_path).get("variants", []):
-                expected.add((family, geometry, item["id"]))
-    completed = [
+    expected = expected_tasks(root, args.scope)
+    all_completed = [
         result for result in
         [*(nanodet_result(path) for path in sorted((root / "nanodet/runs").glob("*"))),
          *(picodet_result(path) for path in sorted((root / "picodet/runs").glob("*")))]
         if result is not None
     ]
+    completed = [item for item in all_completed if result_key(item) in expected]
     completed.sort(key=lambda item: float(item["test"]["mAP50_95"]), reverse=True)
-    completion_keys = {(item["framework"].lower(), item["geometry"], item["variant"]) for item in completed}
+    completion_keys = {result_key(item) for item in completed}
     state_by_key = {
         (item["family"], item["geometry"], item["variant"]): item
         for item in state.get("tasks", {}).values()
