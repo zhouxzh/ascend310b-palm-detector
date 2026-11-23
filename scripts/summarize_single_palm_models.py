@@ -5,11 +5,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import tempfile
 from pathlib import Path
 
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_text_atomically(path: Path, text: str) -> None:
+    """Publish a report without exposing a partially-written file to another lane."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(text)
+        os.replace(temporary_path, path)
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def median(values: list[float]) -> float | None:
@@ -260,9 +280,8 @@ def main() -> int:
         "paired_geometry": paired_geometry,
         "geometry_aggregate": geometry_aggregate(completed, paired_geometry),
     }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    args.output.with_suffix(".md").write_text(markdown(report), encoding="utf-8")
+    write_text_atomically(args.output, json.dumps(report, indent=2, sort_keys=True) + "\n")
+    write_text_atomically(args.output.with_suffix(".md"), markdown(report))
     print(args.output)
     return 0
 
