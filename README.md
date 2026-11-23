@@ -70,6 +70,50 @@ PYTHONPATH=src python scripts/acquire_picodet_pretrained.py
 `palm-nanodet` is the single verified environment for NanoDet, PicoDet, ONNX,
 and later YOLO work. It validates both PyTorch and Paddle GPU arithmetic.
 
+## Palm/Reject ROI Classifier
+
+The palm/reject classifier is a separate ROI gate. It does not alter the
+detector's `palm`, `back`, and `side` output contract. The pinned dataset uses
+`0=palm` and `1=reject`; `reject` covers back, side, unsupported gestures,
+occlusion, and uncertain hand regions.
+
+Download the pinned dataset with the CUDA-enabled `torch` environment:
+
+```bash
+conda run -n torch python scripts/download_palm_reject_roi.py
+```
+
+The classifier supports three comparable backbones:
+
+```text
+nanodet_shufflenetv2_x1
+lcnet_100
+efficientnet_b0
+```
+
+Run one model:
+
+```bash
+conda run -n torch python scripts/train_palm_reject_classifier.py \
+  --backbone lcnet_100 \
+  --dataset data/palm-reject-roi-v005 \
+  --output artifacts/palm-reject-lcnet-100
+```
+
+Run the full three-model matrix detached with TensorBoard:
+
+```bash
+nohup bash scripts/start_palm_reject_training_ace2.sh \
+  > artifacts/palm-reject-training-launcher.log 2>&1 &
+tensorboard --logdir artifacts/20261123-palm-reject-three-backbones/tensorboard \
+  --host 0.0.0.0 --port 6006
+```
+
+The dataset is stored in `data/palm-reject-roi-v005`. Each model run writes its
+best/last checkpoint, epoch status, TensorBoard events, frozen validation/test
+metrics, and inference contract below
+`artifacts/20261123-palm-reject-three-backbones/`.
+
 ## Formal Workflows
 
 ```bash
