@@ -291,6 +291,8 @@ def evaluate_onnx(onnx_path: Path, contract: dict[str, Any], dataset: Any) -> di
     labels = []
     durations = []
     for index in range(len(dataset)):
+        if index % 100 == 0:
+            print(f"ONNX_PROGRESS {index}/{len(dataset)}", flush=True)
         tensor = preprocess(dataset[index]["image"])
         started = time.perf_counter()
         output = session.run(["logits"], {"images": tensor})[0]
@@ -308,6 +310,8 @@ def evaluate_om(om_path: Path, contract: dict[str, Any], dataset: Any) -> dict[s
     durations = []
     try:
         for index in range(len(dataset)):
+            if index % 100 == 0:
+                print(f"NPU_PROGRESS {index}/{len(dataset)}", flush=True)
             tensor = preprocess(dataset[index]["image"])
             started = time.perf_counter()
             output = runner.run(tensor)
@@ -344,9 +348,15 @@ def main() -> int:
     parser.add_argument("--precision-mode", default="allow_fp32_to_fp16")
     parser.add_argument("--skip-onnx", action="store_true")
     parser.add_argument("--skip-om", action="store_true")
+    parser.add_argument("--model-id", action="append", help="evaluate only the named model directory; repeatable")
     args = parser.parse_args()
     dataset = load_from_disk(str(args.dataset))["test"]
     manifest = json.loads((args.model_root / "palm-reject-models.json").read_text(encoding="utf-8"))
+    selected_models = set(args.model_id or [])
+    available_models = {entry["dirname"] for entry in manifest["models"]}
+    unknown_models = selected_models - available_models
+    if unknown_models:
+        raise ValueError(f"unknown model IDs: {sorted(unknown_models)}")
     args.work_dir.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {
         "schema_version": 1,
@@ -360,6 +370,9 @@ def main() -> int:
     }
     for entry in manifest["models"]:
         slug = entry["dirname"]
+        if selected_models and slug not in selected_models:
+            continue
+        print(f"MODEL_BEGIN {slug}", flush=True)
         model_dir = args.model_root / slug
         contract = json.loads((model_dir / "contract.json").read_text(encoding="utf-8"))
         contract["_model_dir"] = str(model_dir)
@@ -391,6 +404,10 @@ def main() -> int:
                     "decision_agreement": float(np.mean((onnx_result["_scores"] >= contract["palm_acceptance"]["threshold"]) == (om_result["_scores"] >= contract["palm_acceptance"]["threshold"]))),
                 }
         report["models"][slug] = model_report
+        report["updated_at"] = utc_now()
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"MODEL_COMPLETE {slug} onnx={bool(onnx_result is not None)} om={bool(not args.skip_om)}", flush=True)
     report["finished_at"] = utc_now()
     report["status"] = "passed"
     args.output.parent.mkdir(parents=True, exist_ok=True)
