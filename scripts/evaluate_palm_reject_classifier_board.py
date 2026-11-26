@@ -324,6 +324,31 @@ def evaluate_om(om_path: Path, contract: dict[str, Any], dataset: Any) -> dict[s
     return {"metrics": metrics(np.asarray(scores), np.asarray(labels), threshold), "latency_ms": latency_summary(durations), "_scores": np.asarray(scores)}
 
 
+class JsonRecordDataset:
+    def __init__(self, path: Path) -> None:
+        self.root = path.parent
+        self.payload = json.loads(path.read_text(encoding="utf-8"))
+        self.records = self.payload.get("records")
+        if not isinstance(self.records, list) or not self.records:
+            raise ValueError(f"annotation file has no records: {path}")
+
+    def __len__(self) -> int:
+        return len(self.records)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        record = self.records[index]
+        label = str(record["label"])
+        if label not in {"palm", "reject"}:
+            raise ValueError(f"invalid label at {index}: {label!r}")
+        image_path = self.root / str(record["image"])
+        return {
+            "sample_id": str(record["sample_id"]),
+            "image": Image.open(image_path).convert("RGB"),
+            "label": label,
+            "label_id": 0 if label == "palm" else 1,
+        }
+
+
 def latency_summary(values: list[float]) -> dict[str, float]:
     array = np.asarray(values, dtype=np.float64)
     return {
@@ -341,7 +366,9 @@ def public_result(result: dict[str, Any]) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--dataset", type=Path, help="datasets.save_to_disk directory")
+    source.add_argument("--annotations-json", type=Path, help="existing test.json with relative image paths")
     parser.add_argument("--model-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path, required=True)
@@ -351,7 +378,7 @@ def main() -> int:
     parser.add_argument("--skip-om", action="store_true")
     parser.add_argument("--model-id", action="append", help="evaluate only the named model directory; repeatable")
     args = parser.parse_args()
-    dataset = load_from_disk(str(args.dataset))["test"]
+    dataset = load_from_disk(str(args.dataset))["test"] if args.dataset else JsonRecordDataset(args.annotations_json)
     manifest = json.loads((args.model_root / "palm-reject-models.json").read_text(encoding="utf-8"))
     selected_models = set(args.model_id or [])
     available_models = {entry["dirname"] for entry in manifest["models"]}
