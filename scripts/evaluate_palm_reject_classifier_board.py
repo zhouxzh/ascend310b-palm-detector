@@ -378,8 +378,13 @@ def main() -> int:
     parser.add_argument("--skip-om", action="store_true")
     parser.add_argument("--model-id", action="append", help="evaluate only the named model directory; repeatable")
     parser.add_argument("--skip-transform-check", action="store_true", help="skip the reference-image probability self-check")
+    parser.add_argument("--max-samples", type=int, help="evaluate only the first N samples for paired ONNX/OM comparison")
     args = parser.parse_args()
     dataset = load_from_disk(str(args.dataset))["test"] if args.dataset else JsonRecordDataset(args.annotations_json)
+    if args.max_samples is not None:
+        if args.max_samples <= 0:
+            raise ValueError("max-samples must be positive")
+        dataset = dataset.select(range(min(args.max_samples, len(dataset)))) if hasattr(dataset, "select") else [dataset[index] for index in range(min(args.max_samples, len(dataset)))]
     manifest = json.loads((args.model_root / "palm-reject-models.json").read_text(encoding="utf-8"))
     selected_models = set(args.model_id or [])
     available_models = {entry["dirname"] for entry in manifest["models"]}
