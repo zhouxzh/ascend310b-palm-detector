@@ -246,6 +246,7 @@ class AclRunner:
 
 def convert_onnx_to_om(onnx_path: Path, output_base: Path, *, soc_version: str, precision_mode: str, log_path: Path) -> dict[str, Any]:
     output_base.parent.mkdir(parents=True, exist_ok=True)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     om_path = output_base.with_suffix(".om")
     if om_path.exists():
         om_path.unlink()
