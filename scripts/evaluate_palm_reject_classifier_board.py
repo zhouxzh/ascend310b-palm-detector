@@ -377,6 +377,7 @@ def main() -> int:
     parser.add_argument("--skip-onnx", action="store_true")
     parser.add_argument("--skip-om", action="store_true")
     parser.add_argument("--model-id", action="append", help="evaluate only the named model directory; repeatable")
+    parser.add_argument("--skip-transform-check", action="store_true", help="skip the reference-image probability self-check")
     args = parser.parse_args()
     dataset = load_from_disk(str(args.dataset))["test"] if args.dataset else JsonRecordDataset(args.annotations_json)
     manifest = json.loads((args.model_root / "palm-reject-models.json").read_text(encoding="utf-8"))
@@ -408,7 +409,11 @@ def main() -> int:
         model_report: dict[str, Any] = {
             "display_name": entry["display_name"],
             "onnx": {"path": str(onnx_path), "bytes": onnx_path.stat().st_size, "sha256": sha256_file(onnx_path)},
-            "transform_check": verify_transform(dataset, contract),
+            "transform_check": (
+                {"status": "skipped", "reason": "operator requested --skip-transform-check"}
+                if args.skip_transform_check
+                else verify_transform(dataset, contract)
+            ),
         }
         onnx_result = None if args.skip_onnx else evaluate_onnx(onnx_path, contract, dataset)
         if onnx_result is not None:
