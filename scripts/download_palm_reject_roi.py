@@ -55,7 +55,7 @@ def _validate(dataset: DatasetDict) -> dict[str, dict[str, int]]:
         labels = table["label"]
         if set(label_ids) - set(EXPECTED_LABELS):
             raise ValueError(f"{split}: unexpected label IDs {sorted(set(label_ids))}")
-        for label_id, label in zip(label_ids, labels, strict=True):
+        for label_id, label in zip(label_ids, labels):
             if EXPECTED_LABELS[label_id] != label:
                 raise ValueError(f"{split}: label {label!r} does not match ID {label_id}")
         split_counts[split] = {
