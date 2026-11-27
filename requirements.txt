@@ -13,6 +13,8 @@
 
 numpy==1.26.4
 Cython==3.3.1
+datasets==4.5.0
+timm==1.0.25
 matplotlib==3.11.2
 mediapipe==0.10.35
 omegaconf==2.3.0
