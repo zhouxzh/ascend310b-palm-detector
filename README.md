@@ -36,24 +36,12 @@ classes: palm, back, side
 The exact artifacts, hashes, preprocessing contracts, and ONNX checks are
 recorded in [docs/12-surface3-training-v003.md](docs/12-surface3-training-v003.md).
 
-## Geometry Results
+## Preprocessing Contract
 
-The formal data is human-confirmed and uses deterministic evaluation. The
-primary release uses LetterBox. A paired direct-stretch ablation used the same
-data, seed, model recipes, early stopping, and frozen test split without adding
-random anisotropic stretch. Direct stretch did not beat the formal candidate:
-
-| Model | LetterBox test mAP | Direct-stretch test mAP |
-| --- | ---: | ---: |
-| NanoDet-Plus-m 320 | 0.5184 | 0.4514 |
-| NanoDet-Plus-m1.5 320 | 0.5292 | 0.5171 |
-| PicoDet-L 320 | 0.5189 | 0.4994 |
-| PicoDet-M 320 | 0.4731 | 0.4789 |
-
-The direct-stretch comparison is retained as experiment evidence only. Random
-anisotropic stretch is deliberately excluded from the primary comparison,
-because direct resize already changes horizontal and vertical scale according
-to source aspect ratio.
+All supported training, validation, ONNX export, and inference use centered
+zero-padded LetterBox preprocessing. Direct-resize model configurations and
+artifacts have been removed. Training-time augmentation retains only
+label-preserving transforms compatible with this deployment contract.
 
 ## Setup
 
@@ -75,7 +63,6 @@ and later YOLO work. It validates both PyTorch and Paddle GPU arithmetic.
 ```bash
 ./scripts/run_surface3_v003.sh
 ./scripts/run_surface3_320_v004.sh
-./scripts/run_surface3_320_stretch_v005.sh
 ```
 
 The controllers are resumable. Each completed model receives checkpoint

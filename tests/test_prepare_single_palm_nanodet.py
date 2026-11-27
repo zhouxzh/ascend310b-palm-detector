@@ -49,7 +49,7 @@ class PrepareSinglePalmNanoDetTest(unittest.TestCase):
             "schedule": {"optimizer": {"lr": 0.32}, "val_intervals": 10},
         }
         matrix = {"classes": ["palm_surface"], "augmentation": {"flip_probability": 0.5, "scale": [0.9, 1.1], "rotation": 10, "translate": 0.05, "brightness": 0.1, "contrast": [0.8, 1.2], "saturation": [0.8, 1.2]}}
-        configured = module.configure(source, {"batch_size": 32}, matrix, Path("/dataset"), "letterbox")
+        configured = module.configure(source, {"batch_size": 32}, matrix, Path("/dataset"))
         self.assertEqual(configured["class_names"], ["palm_surface"])
         self.assertEqual(configured["model"]["arch"]["head"]["num_classes"], 1)
         self.assertEqual(configured["model"]["arch"]["aux_head"]["num_classes"], 1)
@@ -73,5 +73,6 @@ class PrepareSinglePalmNanoDetTest(unittest.TestCase):
             "schedule": {"optimizer": {"lr": 0.32}, "val_intervals": 10},
         }
         matrix = {"classes": ["palm_surface"], "augmentation": {"flip_probability": 0.5, "scale": [0.9, 1.1], "rotation": 10, "translate": 0.05, "brightness": 0.1, "contrast": [0.8, 1.2], "saturation": [0.8, 1.2]}}
-        configured = module.configure(source, {"batch_size": 32}, matrix, Path("/dataset"), "direct_stretch")
+        configured = module.configure(source, {"batch_size": 32}, matrix, Path("/dataset"))
         self.assertFalse(configured["model"]["arch"]["backbone"]["pretrain"])
+        self.assertTrue(configured["data"]["train"]["pipeline"]["palm_letterbox"])

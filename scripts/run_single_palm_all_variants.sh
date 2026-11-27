@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Train every supported NanoDet and PicoDet variant on the audited one-class task.
+# Train supported NanoDet and PicoDet variants with the fixed LetterBox contract.
 set -euo pipefail
 
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -7,14 +7,14 @@ readonly EXPERIMENT_ROOT="$ROOT/artifacts/single-palm-v001"
 readonly DATASET="$ROOT/data/portable-hagridv2-mediapipe-hand/coco-single-palm-v001"
 readonly DATA_AUDIT="$EXPERIMENT_ROOT/single-palm-data-audit.json"
 readonly NANO_MATRIX="$ROOT/configs/single-palm-nanodet-v001.yml"
+readonly NANO_SCOPE="$ROOT/configs/nanodet-plus-letterbox-scope-v001.json"
 readonly PICO_LETTERBOX_MATRIX="$ROOT/configs/picodet-single-palm-letterbox-v001.yml"
-readonly PICO_STRETCH_MATRIX="$ROOT/configs/picodet-single-palm-stretch-v001.yml"
 readonly NANO_RUNS="$EXPERIMENT_ROOT/nanodet/runs"
 readonly PICO_ROOT="$EXPERIMENT_ROOT/picodet"
 readonly PICO_RUNS="$PICO_ROOT/runs"
 readonly STATE="${SINGLE_PALM_STATE_PATH:-$EXPERIMENT_ROOT/training-state.json}"
 readonly COMPARISON_PATH="${SINGLE_PALM_COMPARISON_PATH:-$EXPERIMENT_ROOT/interim-comparison.json}"
-readonly FINAL_COMPARISON_PATH="${SINGLE_PALM_FINAL_COMPARISON_PATH:-$EXPERIMENT_ROOT/final-comparison.json}"
+readonly FINAL_COMPARISON_PATH="${SINGLE_PALM_FINAL_COMPARISON_PATH:-$EXPERIMENT_ROOT/final-nanodet-plus-letterbox-v001.json}"
 readonly PICO_SWEEP_STATE_PREFIX="${SINGLE_PALM_PICO_SWEEP_STATE_PREFIX:-$PICO_ROOT/sweep-state}"
 readonly TEST_ANNOTATIONS="$DATASET/annotations/instances_test.json"
 readonly MAX_RUN_ATTEMPTS="${SINGLE_PALM_MAX_RUN_ATTEMPTS:-3}"
@@ -23,22 +23,16 @@ readonly PICO_PIPELINE_SLOTS="${SINGLE_PALM_PICODET_PARALLELISM:-2}"
 
 usage() {
   cat <<'EOF'
-Usage: run_single_palm_all_variants.sh [--geometry all|letterbox|direct_stretch] [--family all|nanodet|picodet]
+Usage: run_single_palm_all_variants.sh [--family all|nanodet|picodet]
 
-Without arguments, train the complete matrix in the canonical order.  A geometry
-or family selection runs that slice only, enabling independent, resource-isolated lanes.
+All training uses centered zero-padded LetterBox preprocessing. Use --family to
+run NanoDet, PicoDet, or both supported LetterBox model families.
 EOF
 }
 
-geometry_selector="all"
 family_selector="all"
 while (($#)); do
   case "$1" in
-    --geometry)
-      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
-      geometry_selector="$2"
-      shift 2
-      ;;
     --family)
       [[ $# -ge 2 ]] || { usage >&2; exit 2; }
       family_selector="$2"
@@ -54,13 +48,6 @@ while (($#)); do
       ;;
   esac
 done
-case "$geometry_selector" in
-  all|letterbox|direct_stretch) ;;
-  *)
-    printf 'Unsupported geometry selector: %s\n' "$geometry_selector" >&2
-    exit 2
-    ;;
-esac
 case "$family_selector" in
   all|nanodet|picodet) ;;
   *)
@@ -118,7 +105,7 @@ PY
 
 refresh_comparison() {
   PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/summarize_single_palm_models.py \
-    --experiment-root "$EXPERIMENT_ROOT" --output "$COMPARISON_PATH"
+    --experiment-root "$EXPERIMENT_ROOT" --scope "$NANO_SCOPE" --output "$COMPARISON_PATH"
 }
 
 run_with_retries() {
@@ -206,7 +193,7 @@ run_nanodet_locked() {
   local width height
   read -r width height <<< "$dimensions"
   if ! PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/check_single_palm_training_readiness.py \
-    --config "$config" --geometry "$geometry"; then
+    --config "$config"; then
     record_state nanodet "$geometry" "$variant" failed "$run_dir" "readiness check failed"
     return 1
   fi
@@ -349,11 +336,7 @@ PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/chec
   --output "$DATA_AUDIT"
 PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/acquire_picodet_pretrained.py --matrix "$PICO_LETTERBOX_MATRIX" --output artifacts/pretrained/picodet
 
-if [[ "$geometry_selector" == "all" ]]; then
-  geometries=(letterbox direct_stretch)
-else
-  geometries=("$geometry_selector")
-fi
+geometries=(letterbox)
 
 if [[ "$family_selector" != "picodet" ]]; then
   for geometry in "${geometries[@]}"; do
@@ -361,7 +344,7 @@ if [[ "$family_selector" != "picodet" ]]; then
     inventory="$EXPERIMENT_ROOT/nanodet/variant-inventory-$geometry.json"
     if [[ ! -f "$inventory" ]]; then
       PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/prepare_single_palm_nanodet.py \
-        --matrix "$NANO_MATRIX" --geometry "$geometry" --output "$config_root"
+        --matrix "$NANO_MATRIX" --output "$config_root"
       mv "$config_root/../variant-inventory.json" "$inventory"
     fi
     while IFS=$'\t' read -r variant config checkpoint manifest; do
@@ -369,11 +352,16 @@ if [[ "$family_selector" != "picodet" ]]; then
       run_dir="$NANO_RUNS/$run_id"
       run_with_retries nanodet "$geometry" "$variant" "$run_dir" \
         run_nanodet "$geometry" "$variant" "$config" "$checkpoint" "$manifest" || refresh_comparison
-    done < <(INVENTORY="$inventory" conda run --no-capture-output -n palm-nanodet python - <<'PY'
+    done < <(INVENTORY="$inventory" SCOPE="$NANO_SCOPE" conda run --no-capture-output -n palm-nanodet python - <<'PY'
 import json
 import os
+scope = {
+    (item["family"], item["geometry"], item["variant"])
+    for item in json.load(open(os.environ["SCOPE"], encoding="utf-8"))["tasks"]
+}
 for item in json.load(open(os.environ["INVENTORY"], encoding="utf-8"))["variants"]:
-    print("\t".join((item["id"], item["config"], item["checkpoint"], item["manifest"])))
+    if ("nanodet", "letterbox", item["id"]) in scope:
+        print("\t".join((item["id"], item["config"], item["checkpoint"], item["manifest"])))
 PY
 )
   done
@@ -381,15 +369,8 @@ fi
 
 if [[ "$family_selector" != "nanodet" ]]; then
   for geometry in "${geometries[@]}"; do
-    case "$geometry" in
-      letterbox)
-        run_picodet_matrix letterbox "$PICO_LETTERBOX_MATRIX"
-        ;;
-      direct_stretch)
-        run_picodet_matrix direct_stretch "$PICO_STRETCH_MATRIX"
-        ;;
-    esac
+    run_picodet_matrix "$geometry" "$PICO_LETTERBOX_MATRIX"
   done
 fi
 PYTHONPATH=src conda run --no-capture-output -n palm-nanodet python scripts/summarize_single_palm_models.py \
-  --experiment-root "$EXPERIMENT_ROOT" --output "$FINAL_COMPARISON_PATH"
+  --experiment-root "$EXPERIMENT_ROOT" --scope "$NANO_SCOPE" --output "$FINAL_COMPARISON_PATH"

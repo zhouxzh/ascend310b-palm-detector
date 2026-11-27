@@ -90,7 +90,7 @@ class ExportPicoDetOnnxTest(unittest.TestCase):
             _, patch_count = module.prepare_pir_for_paddle2onnx(model, root / "conversion")
             self.assertEqual(patch_count, 2)
 
-    def test_preprocessing_contract_supports_direct_stretch_without_letterbox(self) -> None:
+    def test_preprocessing_contract_rejects_non_letterbox_resize(self) -> None:
         path = Path(__file__).resolve().parents[1] / "scripts/export_picodet_onnx.py"
         spec = importlib.util.spec_from_file_location("export_picodet_onnx_stretch", path)
         module = importlib.util.module_from_spec(spec)
@@ -103,8 +103,5 @@ class ExportPicoDetOnnxTest(unittest.TestCase):
                 {"Permute": {}},
             ]},
         }
-        report = module.preprocessing_contract(config)
-        self.assertEqual(report["geometry"], "direct_stretch")
-        self.assertEqual(report["target_size"], [320, 320])
-        self.assertEqual(report["interp"], 2)
-        self.assertFalse(report["keep_ratio"])
+        with self.assertRaisesRegex(ValueError, "PalmLetterBox"):
+            module.preprocessing_contract(config)

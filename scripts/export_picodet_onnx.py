@@ -32,36 +32,20 @@ def preprocessing_contract(config: dict) -> dict:
     """Extract the deployment preprocessing contract from the generated config."""
     transforms = config["TestReader"]["sample_transforms"]
     letterbox = next((item["PalmLetterBox"] for item in transforms if "PalmLetterBox" in item), None)
-    resize = next((item["Resize"] for item in transforms if "Resize" in item), None)
     normalize = next((item["NormalizeImage"] for item in transforms if "NormalizeImage" in item), None)
     if normalize is None or not any("Permute" in item for item in transforms):
         raise ValueError("PicoDet ONNX export requires NormalizeImage and Permute test transforms")
-    if letterbox is not None and resize is not None:
-        raise ValueError("PicoDet test transforms must not combine LetterBox and Resize")
-    if letterbox is None and resize is None:
-        raise ValueError("PicoDet ONNX export requires LetterBox or Resize test transforms")
-    if letterbox is not None:
-        target_size = [int(value) for value in letterbox["target_size"]]
-        if len(target_size) != 2 or min(target_size) <= 0:
-            raise ValueError("PalmLetterBox target size must contain two positive dimensions")
-        geometry = {
-            "geometry": "centered_zero_padded_letterbox",
-            "target_size": target_size,
-            "pad_value": int(letterbox.get("pad_value", 0)),
-            "keep_ratio": True,
-        }
-    else:
-        target_size = [int(value) for value in resize["target_size"]]
-        if len(target_size) != 2 or min(target_size) <= 0:
-            raise ValueError("Resize target size must contain two positive dimensions")
-        if resize.get("keep_ratio", False):
-            raise ValueError("PicoDet stretch export requires keep_ratio=false")
-        geometry = {
-            "geometry": "direct_stretch",
-            "target_size": target_size,
-            "interp": int(resize.get("interp", 2)),
-            "keep_ratio": False,
-        }
+    if letterbox is None:
+        raise ValueError("PicoDet ONNX export requires a PalmLetterBox test transform")
+    target_size = [int(value) for value in letterbox["target_size"]]
+    if len(target_size) != 2 or min(target_size) <= 0:
+        raise ValueError("PalmLetterBox target size must contain two positive dimensions")
+    geometry = {
+        "geometry": "centered_zero_padded_letterbox",
+        "target_size": target_size,
+        "pad_value": int(letterbox.get("pad_value", 0)),
+        "keep_ratio": True,
+    }
     return {
         "decode_color": "RGB (OpenCV BGR decode converted by PaddleDetection Decode)",
         **geometry,

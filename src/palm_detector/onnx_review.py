@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 from .dataset_contract import sha256_file
-from .postprocess import center_priors, decode_nanodet_plus, detections_to_json, preprocess_bgr, preprocess_bgr_letterbox
+from .postprocess import center_priors, decode_nanodet_plus, detections_to_json, preprocess_bgr_letterbox
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class OnnxReviewModels:
                 width, height = config["data"]["val"]["input_size"]
                 input_size = (height, width)
                 letterbox = bool(config["data"]["val"].get("pipeline", {}).get("palm_letterbox", False))
-                if config["data"]["val"].get("keep_ratio", False) and not letterbox:
+                if not letterbox:
                     continue
                 strides = tuple(int(value) for value in head["strides"])
                 reg_max = int(head["reg_max"])
@@ -121,11 +121,9 @@ class OnnxReviewModels:
         results = []
         for model_id in model_ids:
             model = self.models[model_id]
-            if model.letterbox:
-                tensor, letterbox = preprocess_bgr_letterbox(image, input_size=model.input_size, mean=model.mean, std=model.std)
-            else:
-                tensor, _ = preprocess_bgr(image, input_size=model.input_size, mean=model.mean, std=model.std)
-                letterbox = None
+            tensor, letterbox = preprocess_bgr_letterbox(
+                image, input_size=model.input_size, mean=model.mean, std=model.std
+            )
             key = (model_id, str(image_path.resolve()), image_stat.st_size, image_stat.st_mtime_ns)
             with self.lock:
                 output = self.cache.get(key)
@@ -140,7 +138,7 @@ class OnnxReviewModels:
                         self.cache.popitem(last=False)
             detections = decode_nanodet_plus(
                 output, class_names=model.class_names, score_threshold=score_threshold,
-                original_size=None if letterbox is not None else image.shape[:2], letterbox=letterbox, input_size=model.input_size,
+                original_size=None, letterbox=letterbox, input_size=model.input_size,
                 strides=model.strides, reg_max=model.reg_max,
                 center_offset=model.center_offset,
             )[0]

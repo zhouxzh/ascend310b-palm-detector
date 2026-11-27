@@ -4,9 +4,6 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-from palm_detector.postprocess import Detection
-
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -35,17 +32,3 @@ class ComparePicoDetOnnxTest(unittest.TestCase):
         ]
         selected = self.module.deterministic_sample(images, annotations, 3)
         self.assertEqual([item["id"] for item in selected], [3, 4, 2])
-
-    def test_direct_stretch_boxes_scale_back_to_source_image(self) -> None:
-        source = [Detection((10.0, 20.0, 30.0, 40.0), 0.9, 0, ("palm",))]
-        restored = self.module.unscale_direct_detections(source, (640, 960), (320, 320))
-        self.assertEqual(restored[0].xyxy, (30.0, 40.0, 90.0, 80.0))
-
-    def test_runner_uses_the_same_direct_stretch_coordinate_mapping(self) -> None:
-        path = ROOT / "scripts/run_picodet_onnx.py"
-        spec = importlib.util.spec_from_file_location("run_picodet_onnx", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        source = [Detection((10.0, 20.0, 30.0, 40.0), 0.9, 0, ("palm",))]
-        restored = module._unscale_direct_detections(source, (640, 960), (320, 320))
-        self.assertEqual(restored[0].xyxy, (30.0, 40.0, 90.0, 80.0))

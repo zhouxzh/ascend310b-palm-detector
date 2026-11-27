@@ -2,11 +2,9 @@
 
 ## Scope
 
-The initial full-variant experiment established a consistent advantage for
-LetterBox preprocessing over direct stretch on the completed matched pairs.
-To keep the remaining work focused, no additional direct-stretch jobs and no
-additional non-NanoDet-Plus jobs are scheduled. Existing completed artifacts
-are retained as historical baselines; they are not retrained or discarded.
+The controlled geometry evaluation selected LetterBox preprocessing. This
+repository retains only the LetterBox code path and model artifacts; all future
+NanoDet-Plus work is restricted to that contract.
 
 The required active training target is every independent NanoDet-Plus recipe
 under LetterBox preprocessing, with the audited one-class `palm_surface` COCO
@@ -36,9 +34,7 @@ and pass validation:
 4. Frozen test-set `coco-metrics.json` from the held-out test annotations.
 
 The final model selection report ranks these five frozen-test mAP50-95 values.
-The earlier completed matched direct-stretch runs remain evidence for the
-preprocessing decision, but are not a reason to schedule further direct-stretch
-training.
+The final report contains only the active LetterBox scope.
 
 Generate the scoped report with:
 

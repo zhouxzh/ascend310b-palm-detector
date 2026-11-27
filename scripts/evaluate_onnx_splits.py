@@ -103,8 +103,8 @@ def main() -> int:
     root = Path("/home/zhong/Documents/ascend310b-palm-detector")
     sys.path.insert(0, str(root / "src"))
     from palm_detector.labels import SURFACE_CATEGORY_IDS
-    from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr, preprocess_picodet_bgr_letterbox
-    from palm_detector.postprocess import decode_nanodet_plus, preprocess_bgr, preprocess_bgr_letterbox
+    from palm_detector.picodet_postprocess import decode_picodet, preprocess_picodet_bgr_letterbox
+    from palm_detector.postprocess import decode_nanodet_plus, preprocess_bgr_letterbox
 
     jobs = json.loads(args.jobs.read_text(encoding="utf-8"))
     output_dir = args.output_dir.resolve()
@@ -140,6 +140,8 @@ def main() -> int:
             input_size = tuple(int(value) for value in job["input_size"])
             family = job["family"]
             geometry = job["geometry"]
+            if geometry != "letterbox":
+                raise ValueError("only LetterBox evaluation jobs are supported")
             score_threshold = float(job.get("score_threshold", 0.05 if family == "nanodet" else 0.025))
             nms_iou = float(job.get("nms_iou", 0.6))
             keep_top_k = int(job.get("keep_top_k", 100))
@@ -150,13 +152,8 @@ def main() -> int:
             if first is None:
                 raise ValueError(f"cannot read {records[0]['file_name']}")
             def preprocess(image):
-                if family == "nanodet" and geometry == "direct_stretch":
-                    tensor, _ = preprocess_bgr(image, input_size=input_size)
-                    return tensor, None
                 if family == "nanodet" and geometry == "letterbox":
                     return preprocess_bgr_letterbox(image, input_size=input_size)
-                if family == "picodet" and geometry == "direct_stretch":
-                    return preprocess_picodet_bgr(image, input_size=input_size), None
                 if family == "picodet" and geometry == "letterbox":
                     return preprocess_picodet_bgr_letterbox(image, input_size=input_size)
                 raise ValueError(f"unsupported family/geometry {family}/{geometry}")

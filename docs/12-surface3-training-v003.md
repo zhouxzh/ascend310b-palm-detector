@@ -108,53 +108,20 @@ it would confound a resolution comparison. The controller exports and validates
 each static 320 ONNX artifact before its frozen test metrics enter the combined
 comparison table.
 
-## Direct-Stretch Ablation
+## Preprocessing Decision
 
-`scripts/run_surface3_320_stretch_v005.sh` is the paired `320x320` geometric
-ablation against the completed 320 LetterBox candidates. It trains the same
-four architectures: NanoDet-Plus-m, NanoDet-Plus-m1.5, PicoDet-L, and
-PicoDet-M. It retains the same human-confirmed surface labels, balanced train
-annotations, seed, batch size, learning rate, early-stop policy, and frozen
-test split. The sole planned model-input change is direct resize to 320 square:
-no zero padding and `keep_ratio=false`.
-
-For NanoDet, deployment uses the upstream `ShapeTransform` direct-resize
-sampling rule (`warpPerspective` with independent x/y scales), rather than a
-similar-but-not-identical `cv2.resize` call. This keeps ONNX input pixels
-identical to the validation geometry.
-
-Random anisotropic stretch is deliberately disabled in this primary comparison.
-Direct resize already changes x and y scale independently according to each
-image's aspect ratio. Adding a random second stretch would conflate the
-LetterBox comparison with a separate augmentation hypothesis and could degrade
-the geometry needed downstream for palmprint ROI extraction. Existing
-label-preserving flip, isotropic NanoDet scale, rotation/translation, and
-photometric distortion remain enabled. A random-stretch experiment is only
-meaningful as a separate follow-up if direct stretch first beats LetterBox on
-the frozen test metric.
-
-The completed frozen-test comparison did not promote direct stretch:
-
-| Model | LetterBox mAP50-95 | Direct stretch mAP50-95 | Decision |
-| --- | ---: | ---: | --- |
-| NanoDet-Plus-m 320 | 0.5184 | 0.4514 | LetterBox |
-| NanoDet-Plus-m1.5 320 | 0.5292 | 0.5171 | LetterBox |
-| PicoDet-L 320 | 0.5189 | 0.4994 | LetterBox |
-| PicoDet-M 320 | 0.4731 | 0.4789 | Stretch is higher within the pair, but below the release candidate |
-
-LetterBox therefore remains the formal deployment geometry. Across every
-completed candidate, NanoDet-Plus-m 416 LetterBox remains the strongest frozen
-test result at `0.5321` mAP50-95. No random-anisotropic-stretch follow-up is
-scheduled.
+LetterBox is the formal deployment geometry. The completed controlled geometry
+comparison established that direct resizing is not retained for this project,
+so the associated configurations, models, and runtime paths were removed. All
+new surface-model experiments must use the same centered zero-padded LetterBox
+contract in training, validation, ONNX export, and inference.
 
 ## Launch
 
 ```bash
 ./scripts/run_surface3_v003.sh
 ./scripts/run_surface3_320_v004.sh
-./scripts/run_surface3_320_stretch_v005.sh
 ```
 
 Each controller is resumable and exports a verified ONNX model after checkpoint
-selection. The paired GPU monitor stops only its own controller after three
-30-second samples at or above 82C.
+selection.

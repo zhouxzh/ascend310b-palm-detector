@@ -40,7 +40,7 @@ class OnnxReviewTest(unittest.TestCase):
                 (run / "config.yml").write_text(yaml.safe_dump({
                     "model": {"arch": {"name": "NanoDetPlus", "head": {"strides": [8, 16, 32, 64], "reg_max": 7}}},
                     "class_names": classes,
-                    "data": {"val": {"input_size": [320, 320], "keep_ratio": False, "pipeline": {"normalize": [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]}}},
+                    "data": {"val": {"input_size": [320, 320], "keep_ratio": False, "pipeline": {"palm_letterbox": True, "normalize": [[103.53, 116.28, 123.675], [57.375, 57.12, 58.395]]}}},
                 }))
                 (run / "onnx-check.json").write_text(json.dumps({
                     "valid": True, "num_classes": len(classes), "sha256": hashlib.sha256(onnx.read_bytes()).hexdigest(),

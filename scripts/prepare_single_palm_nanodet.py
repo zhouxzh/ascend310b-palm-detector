@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate immutable NanoDet configs for the complete single-palm matrix."""
+"""Generate immutable LetterBox NanoDet configs for the single-palm matrix."""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def configure(source: dict, variant: dict, matrix: dict, dataset: Path, geometry: str) -> dict:
-    """Apply only task/data/geometry changes to an upstream NanoDet recipe."""
+def configure(source: dict, variant: dict, matrix: dict, dataset: Path) -> dict:
+    """Apply the audited task and fixed LetterBox contract to a NanoDet recipe."""
     config = json.loads(json.dumps(source))
     classes = list(matrix["classes"])
     if classes != ["palm_surface"]:
@@ -52,7 +52,7 @@ def configure(source: dict, variant: dict, matrix: dict, dataset: Path, geometry
         target["ann_path"] = str(dataset / "annotations" / annotations)
         target["keep_ratio"] = False
         pipeline = target.setdefault("pipeline", {})
-        pipeline["palm_letterbox"] = geometry == "letterbox"
+        pipeline["palm_letterbox"] = True
         if split == "train":
             augmentation = matrix["augmentation"]
             pipeline.update({
@@ -89,7 +89,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--matrix", type=Path, default=DEFAULT_MATRIX)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
-    parser.add_argument("--geometry", choices=("letterbox", "direct_stretch"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     matrix_bytes = args.matrix.read_bytes()
@@ -106,7 +105,7 @@ def main() -> int:
     inventory = {
         "schema_version": 1,
         "task": matrix["task"],
-        "geometry": args.geometry,
+        "geometry": "letterbox",
         "matrix_sha256": hashlib.sha256(matrix_bytes).hexdigest(),
         "dataset": str(dataset),
         "variants": [],
@@ -117,8 +116,8 @@ def main() -> int:
         manifest = ROOT / variant["manifest"]
         if not source_path.is_file() or not checkpoint.is_file() or not manifest.is_file():
             raise FileNotFoundError(f"missing source, checkpoint, or manifest for {variant['id']}")
-        config = configure(yaml.safe_load(source_path.read_text(encoding="utf-8")), variant, matrix, dataset, args.geometry)
-        config_path = args.output / f"{variant['id']}-{args.geometry}.yml"
+        config = configure(yaml.safe_load(source_path.read_text(encoding="utf-8")), variant, matrix, dataset)
+        config_path = args.output / f"{variant['id']}-letterbox.yml"
         config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
         inventory["variants"].append({
             "id": variant["id"],

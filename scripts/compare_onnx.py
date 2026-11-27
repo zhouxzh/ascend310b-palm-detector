@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 import torch
 
-from palm_detector.postprocess import decode_nanodet_plus, detections_to_json, preprocess_bgr, preprocess_bgr_letterbox
+from palm_detector.postprocess import decode_nanodet_plus, detections_to_json, preprocess_bgr_letterbox
 
 
 def _export_equivalent_output(pytorch_output: np.ndarray, num_classes: int = 2) -> np.ndarray:
@@ -161,8 +161,8 @@ def main() -> int:
 
     load_config(cfg, str(args.config))
     letterbox_mode = bool(cfg.data.val.pipeline.get("palm_letterbox", False))
-    if cfg.data.val.keep_ratio and not letterbox_mode:
-        raise ValueError("compare_onnx requires direct resize or the fixed Palm LetterBox mode")
+    if not letterbox_mode:
+        raise ValueError("compare_onnx requires the fixed Palm LetterBox mode")
     input_width, input_height = (int(value) for value in cfg.data.val.input_size)
     mean, std = (tuple(values) for values in cfg.data.val.pipeline.normalize)
     head = cfg.model.arch.head
@@ -183,23 +183,21 @@ def main() -> int:
             image = cv2.imread(str(image_path))
             if image is None:
                 raise ValueError(f"cannot read image {image_path}")
-            if letterbox_mode:
-                tensor, letterbox = preprocess_bgr_letterbox(image, input_size=(input_height, input_width), mean=mean, std=std)
-            else:
-                tensor, _ = preprocess_bgr(image, input_size=(input_height, input_width), mean=mean, std=std)
-                letterbox = None
+            tensor, letterbox = preprocess_bgr_letterbox(
+                image, input_size=(input_height, input_width), mean=mean, std=std
+            )
             pytorch_logits = model(torch.from_numpy(tensor)).numpy()
             pytorch_output = _export_equivalent_output(pytorch_logits, len(cfg.class_names))
             onnx_output = session.run(["output"], {"data": tensor})[0]
             difference = np.abs(pytorch_output - onnx_output)
             max_error = float(difference.max())
-            decoded_torch = detections_to_json(decode_nanodet_plus(pytorch_logits, scores_are_logits=True, original_size=None if letterbox else image.shape[:2], letterbox=letterbox, **decode_options)[0])
-            decoded_onnx = detections_to_json(decode_nanodet_plus(onnx_output, original_size=None if letterbox else image.shape[:2], letterbox=letterbox, **decode_options)[0])
+            decoded_torch = detections_to_json(decode_nanodet_plus(pytorch_logits, scores_are_logits=True, original_size=None, letterbox=letterbox, **decode_options)[0])
+            decoded_onnx = detections_to_json(decode_nanodet_plus(onnx_output, original_size=None, letterbox=letterbox, **decode_options)[0])
             decoded_match, minimum_iou = _compare_detections(decoded_torch, decoded_onnx, args.minimum_decoded_iou)
             passed = max_error <= args.max_abs_error and decoded_match
             all_ok = all_ok and passed
             report_images.append({"image": str(image_path), "raw_max_abs_error": max_error, "raw_mean_abs_error": float(difference.mean()), "decoded_class_and_iou_match": decoded_match, "decoded_minimum_iou": minimum_iou, "pytorch_detections": decoded_torch, "onnx_detections": decoded_onnx, "passed": passed})
-    report = {"valid": all_ok, "raw_tensor_contract": "PyTorch class logits sigmoid-transformed to match NanoDet ONNX export; DFL bins unchanged", "preprocess": "mediapipe_letterbox" if letterbox_mode else "direct_resize", "input_size": [input_width, input_height], "strides": list(decode_options["strides"]), "reg_max": decode_options["reg_max"], "center_offset": decode_options["center_offset"], "max_abs_error_limit": args.max_abs_error, "decoded_iou_limit": args.minimum_decoded_iou, "sample_manifest": str(args.sample_manifest) if sample_manifest is not None and args.sample_manifest else None, "images": report_images}
+    report = {"valid": all_ok, "raw_tensor_contract": "PyTorch class logits sigmoid-transformed to match NanoDet ONNX export; DFL bins unchanged", "preprocess": "mediapipe_letterbox", "input_size": [input_width, input_height], "strides": list(decode_options["strides"]), "reg_max": decode_options["reg_max"], "center_offset": decode_options["center_offset"], "max_abs_error_limit": args.max_abs_error, "decoded_iou_limit": args.minimum_decoded_iou, "sample_manifest": str(args.sample_manifest) if sample_manifest is not None and args.sample_manifest else None, "images": report_images}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {args.output}: {'PASS' if all_ok else 'FAIL'}")

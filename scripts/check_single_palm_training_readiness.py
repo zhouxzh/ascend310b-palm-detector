@@ -16,7 +16,6 @@ from palm_detector.labels import SINGLE_PALM_CATEGORY_IDS, validate_categories
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--geometry", choices=("letterbox", "direct_stretch"), required=True)
     args = parser.parse_args()
     config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     blockers = []
@@ -35,8 +34,8 @@ def main() -> int:
             continue
         categories = json.loads(annotations.read_text(encoding="utf-8")).get("categories", [])
         blockers.extend(validate_categories(categories, SINGLE_PALM_CATEGORY_IDS))
-        if bool(data["pipeline"].get("palm_letterbox", False)) != (args.geometry == "letterbox"):
-            blockers.append(f"{split} geometry does not match the requested {args.geometry} policy")
+        if not bool(data["pipeline"].get("palm_letterbox", False)):
+            blockers.append(f"{split} must use the fixed LetterBox preprocessing policy")
         if data.get("keep_ratio", True):
             blockers.append(f"{split} must set keep_ratio=false")
     train_pipeline = config["data"]["train"]["pipeline"]
@@ -46,7 +45,7 @@ def main() -> int:
         blockers.append("random anisotropic stretch must remain disabled")
     if config["device"].get("gpu_ids") != [0] or not torch.cuda.is_available():
         blockers.append("exactly one usable PyTorch CUDA device is required")
-    print(json.dumps({"ready": not blockers, "config": str(args.config), "geometry": args.geometry, "blockers": blockers}, sort_keys=True))
+    print(json.dumps({"ready": not blockers, "config": str(args.config), "geometry": "letterbox", "blockers": blockers}, sort_keys=True))
     return 0 if not blockers else 2
 
 
